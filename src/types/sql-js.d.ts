@@ -1,6 +1,9 @@
 declare module 'sql.js' {
   export interface SqlJsConfig {
     locateFile?: (file: string) => string;
+    wasmBinary?: Uint8Array | ArrayBuffer;
+    fetchWasm?: boolean;
+    instantiateWasm?: Function;
   }
 
   export class Statement {
