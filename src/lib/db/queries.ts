@@ -50,6 +50,33 @@ export const settingsQueries = {
   async update(data: any) { const sets: string[] = []; const vals: any[] = []; Object.entries(data).forEach(([k, v]) => { if (v === undefined) return; const col = k === 'githubOwner' ? 'github_owner' : k === 'githubRepo' ? 'github_repo' : k === 'githubBranch' ? 'github_branch' : k === 'githubPaths' ? 'github_paths' : k === 'githubToken' ? 'github_token' : k === 'youtubeClientId' ? 'youtube_client_id' : k === 'youtubeClientSecret' ? 'youtube_client_secret' : k === 'youtubeRefreshToken' ? 'youtube_refresh_token' : k === 'syncIntervalMinutes' ? 'sync_interval_minutes' : k === 'maxShortDuration' ? 'max_short_duration' : k === 'videoWidth' ? 'video_width' : k === 'videoHeight' ? 'video_height' : k === 'videoFps' ? 'video_fps' : k; const val = Array.isArray(v) ? JSON.stringify(v) : v; sets.push(`${col} = ?`); vals.push(val); }); if (sets.length) { sets.push('updated_at = CURRENT_TIMESTAMP'); run(`UPDATE settings SET ${sets.join(', ')} WHERE id = ?`, [...vals, 'default']); } },
 };
 
+export interface HookAnalyticsRow { id: string; short_id: string; hook_id: string; views: number; likes: number; watch_time_seconds: number; generated_at: string; analyzed_at: string | null; }
+
+export const hookAnalyticsQueries = {
+  async findAll() { return query('SELECT * FROM hook_analytics ORDER BY generated_at DESC'); },
+  async findByHookId(hookId: string) { return query('SELECT * FROM hook_analytics WHERE hook_id = ? ORDER BY generated_at DESC', [hookId]); },
+  async findByShortId(shortId: string) { const r = getOne('SELECT * FROM hook_analytics WHERE short_id = ?', [shortId]); return r || null; },
+  async create(d: { shortId: string; hookId: string; views?: number; likes?: number; watchTimeSeconds?: number }) {
+    const id = crypto.randomUUID();
+    run('INSERT INTO hook_analytics (id, short_id, hook_id, views, likes, watch_time_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, d.shortId, d.hookId, d.views || 0, d.likes || 0, d.watchTimeSeconds || 0]);
+    return id;
+  },
+  async updateViews(id: string, views: number, likes: number, watchTimeSeconds: number) {
+    run('UPDATE hook_analytics SET views = ?, likes = ?, watch_time_seconds = ?, analyzed_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [views, likes, watchTimeSeconds, id]);
+  },
+  async getTopPerforming(limit: number = 5) {
+    return query('SELECT ha.*, h.text as hook_text FROM hook_analytics ha JOIN hooks h ON ha.hook_id = h.id ORDER BY ha.views DESC LIMIT ?', [limit]);
+  },
+  async getHookPerformance() {
+    return query(`SELECT h.id, h.text, COUNT(ha.id) as total_shorts, SUM(ha.views) as total_views, AVG(ha.views) as avg_views
+      FROM hooks h LEFT JOIN hook_analytics ha ON h.id = ha.hook_id
+      WHERE h.is_active = 1 GROUP BY h.id ORDER BY avg_views DESC`);
+  },
+  async delete(id: string) { run('DELETE FROM hook_analytics WHERE id = ?', [id]); },
+};
+
 export const youtubeTokenQueries = {
   async find() { const r = getOne('SELECT * FROM youtube_tokens WHERE id = ?', ['default']); return r ? { accessToken: r.access_token, refreshToken: r.refresh_token, expiryDate: r.expiry_date } : null; },
   async upsert(d: { accessToken: string; refreshToken: string; expiryDate: number }) { run('INSERT OR REPLACE INTO youtube_tokens (id, access_token, refresh_token, expiry_date, updated_at) VALUES (\'default\', ?, ?, ?, CURRENT_TIMESTAMP)', [d.accessToken, d.refreshToken, d.expiryDate]); },

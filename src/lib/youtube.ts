@@ -40,6 +40,55 @@ export class YouTubeClient {
     return `https://www.youtube.com/watch?v=${response.data.id}`;
   }
 
+  async getVideoStats(videoId: string): Promise<{ views: number; likes: number; watchTime: number } | null> {
+    try {
+      const response = await this.youtube.videos.list({
+        part: ['statistics'],
+        id: [videoId],
+      });
+
+      const video = response.data.items?.[0];
+      if (!video?.statistics) return null;
+
+      return {
+        views: parseInt(video.statistics.viewCount || '0'),
+        likes: parseInt(video.statistics.likeCount || '0'),
+        watchTime: 0,
+      };
+    } catch (error) {
+      console.error(`Failed to get stats for video ${videoId}:`, error);
+      return null;
+    }
+  }
+
+  async getAllShortsStats(): Promise<Array<{ videoId: string; views: number; likes: number }>> {
+    try {
+      const response = await this.youtube.search.list({
+        part: ['id'],
+        forMine: true,
+        type: ['video'],
+        maxResults: 50,
+      });
+
+      const videoIds = response.data.items?.map(item => item.id?.videoId).filter(Boolean) as string[] || [];
+      if (!videoIds.length) return [];
+
+      const statsResponse = await this.youtube.videos.list({
+        part: ['statistics'],
+        id: videoIds,
+      });
+
+      return statsResponse.data.items?.map(video => ({
+        videoId: video.id || '',
+        views: parseInt(video.statistics?.viewCount || '0'),
+        likes: parseInt(video.statistics?.likeCount || '0'),
+      })) || [];
+    } catch (error) {
+      console.error('Failed to get all shorts stats:', error);
+      return [];
+    }
+  }
+
   static async createFromStoredTokens() {
     const tokens = await youtubeTokenQueries.find();
     if (!tokens) return null;

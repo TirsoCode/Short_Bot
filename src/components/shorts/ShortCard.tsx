@@ -14,6 +14,7 @@ interface ShortCardProps {
   onReject: (id: string) => void;
   onEdit: (short: Short) => void;
   onDelete: (id: string) => void;
+  onUpload?: (id: string) => void;
   isRendering?: boolean;
 }
 
@@ -103,22 +104,22 @@ export const ShortCard: React.FC<ShortCardProps> = ({
           </Button>
         )}
 
-        {short.status === 'rendered' && (
-          <>
-            <Button size="sm" onClick={() => onAccept(short.id)} className="bg-green-600 hover:bg-green-700">
-              Aceptar y Subir
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onReject(short.id)}>
-              Rechazar
-            </Button>
-          </>
-        )}
+          {short.status === 'rendered' && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => onAccept(short.id)} className="bg-green-600 hover:bg-green-700 text-white">
+                Aceptar
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => onReject(short.id)}>
+                Rechazar
+              </Button>
+            </>
+          )}
 
-        {short.status === 'accepted' && (
-          <Button size="sm" variant="secondary" disabled>
-            Subiendo...
-          </Button>
-        )}
+          {short.status === 'accepted' && onUpload && (
+            <Button size="sm" onClick={() => onUpload(short.id)} className="bg-blue-600 hover:bg-blue-700">
+              Subir a YouTube
+            </Button>
+          )}
 
         {short.status === 'published' && (
           <Button size="sm" variant="secondary" disabled className="bg-emerald-100 text-emerald-800">
