@@ -6,7 +6,10 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "db:init": "node scripts/init-db.cjs"
+    "db:init": "node scripts/init-db.cjs",
+    "postinstall": "node scripts/ensure-remotion.cjs",
+    "remotion:install": "npm --prefix remotion install",
+    "render": "npm --prefix remotion run render"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
