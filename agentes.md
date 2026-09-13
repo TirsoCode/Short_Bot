@@ -169,4 +169,3 @@ Asegúrate de no versionar estas claves y usarlas vía secretos en Vercel/GitHub
 
 ---
 
-Document creado automáticamente por el asistente. Si quieres, puedo abrir un PR con este fichero o ajustarlo (idioma, nivel de detalle, formato).
