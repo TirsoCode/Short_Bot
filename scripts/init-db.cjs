@@ -23,43 +23,43 @@ async function initDb() {
   run(`CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, sha TEXT NOT NULL UNIQUE, url TEXT NOT NULL, downloaded_path TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
   run(`CREATE TABLE IF NOT EXISTS hooks (id TEXT PRIMARY KEY, text TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
   run(`CREATE TABLE IF NOT EXISTS shorts (id TEXT PRIMARY KEY, hook_id TEXT NOT NULL, hook_text TEXT NOT NULL, media_ids TEXT NOT NULL DEFAULT '[]', title TEXT NOT NULL, description TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'draft', rendered_path TEXT, duration INTEGER, youtube_video_id TEXT, youtube_url TEXT, error_message TEXT, reject_reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
-  run(`CREATE TABLE IF NOT EXISTS settings (id TEXT PRIMARY KEY DEFAULT 'default', github_owner TEXT NOT NULL DEFAULT '', github_repo TEXT NOT NULL DEFAULT '', github_branch TEXT NOT NULL DEFAULT 'main', github_paths TEXT NOT NULL DEFAULT '["videos", "screenshots"]', github_token TEXT NOT NULL DEFAULT '', youtube_client_id TEXT NOT NULL DEFAULT '', youtube_client_secret TEXT NOT NULL DEFAULT '', youtube_refresh_token TEXT, sync_interval_minutes INTEGER NOT NULL DEFAULT 30, max_short_duration INTEGER NOT NULL DEFAULT 30, video_width INTEGER NOT NULL DEFAULT 1080, video_height INTEGER NOT NULL DEFAULT 1920, video_fps INTEGER NOT NULL DEFAULT 30, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
+  run(`CREATE TABLE IF NOT EXISTS settings (id TEXT PRIMARY KEY DEFAULT 'default', github_owner TEXT NOT NULL DEFAULT '', github_repo TEXT NOT NULL DEFAULT '', github_branch TEXT NOT NULL DEFAULT 'main', github_paths TEXT NOT NULL DEFAULT '["videos", "fotos"]', github_token TEXT NOT NULL DEFAULT '', youtube_client_id TEXT NOT NULL DEFAULT '', youtube_client_secret TEXT NOT NULL DEFAULT '', youtube_refresh_token TEXT, sync_interval_minutes INTEGER NOT NULL DEFAULT 30, max_short_duration INTEGER NOT NULL DEFAULT 30, video_width INTEGER NOT NULL DEFAULT 1080, video_height INTEGER NOT NULL DEFAULT 1920, video_fps INTEGER NOT NULL DEFAULT 30, media_paths TEXT NOT NULL DEFAULT '["videos", "fotos"]', auto_shorts_per_day INTEGER NOT NULL DEFAULT 2, auto_publish INTEGER NOT NULL DEFAULT 0, auto_runs TEXT NOT NULL DEFAULT '[]', style_json TEXT NOT NULL DEFAULT '{"background":"#000000","hookTextColor":"#ffffff","hookBg":"rgba(0, 0, 0, 0.75)","hookBorder":"rgba(255, 255, 255, 0.15)","hookFontSize":52,"accent":"#3b82f6","outroText":"¡Sígueme para más!","outroSubtext":"Suscríbete y activa la campanita 🔔"}', created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
   run(`CREATE TABLE IF NOT EXISTS youtube_tokens (id TEXT PRIMARY KEY DEFAULT 'default', access_token TEXT NOT NULL, refresh_token TEXT NOT NULL, expiry_date INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
 
-  run(`CREATE TABLE IF NOT EXISTS hook_analytics (id TEXT PRIMARY KEY, short_id TEXT NOT NULL, hook_id TEXT NOT NULL, views INTEGER DEFAULT 0, likes INTEGER DEFAULT 0, watch_time_seconds INTEGER DEFAULT 0, generated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, analyzed_at TEXT)`);
-  run(`CREATE INDEX IF NOT EXISTS hook_analytics_short_idx ON hook_analytics(short_id)`);
-  run(`CREATE INDEX IF NOT EXISTS hook_analytics_hook_idx ON hook_analytics(hook_id)`);
-  run(`CREATE INDEX IF NOT EXISTS hook_analytics_views_idx ON hook_analytics(views)`);
+  const settingsColumns = db.exec(`PRAGMA table_info(settings)`)[0].values.map(row => row[1]);
+  if (!settingsColumns.includes('media_paths')) {
+    run(`ALTER TABLE settings ADD COLUMN media_paths TEXT NOT NULL DEFAULT '["videos", "fotos"]'`);
+  }
+  if (!settingsColumns.includes('auto_shorts_per_day')) {
+    run(`ALTER TABLE settings ADD COLUMN auto_shorts_per_day INTEGER NOT NULL DEFAULT 2`);
+  }
+  if (!settingsColumns.includes('auto_publish')) {
+    run(`ALTER TABLE settings ADD COLUMN auto_publish INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!settingsColumns.includes('auto_runs')) {
+    run(`ALTER TABLE settings ADD COLUMN auto_runs TEXT NOT NULL DEFAULT '[]'`);
+  }
+  if (!settingsColumns.includes('style_json')) {
+    run(`ALTER TABLE settings ADD COLUMN style_json TEXT NOT NULL DEFAULT '{"background":"#000000","hookTextColor":"#ffffff","hookBg":"rgba(0, 0, 0, 0.75)","hookBorder":"rgba(255, 255, 255, 0.15)","hookFontSize":52,"accent":"#3b82f6","outroText":"¡Sígueme para más!","outroSubtext":"Suscríbete y activa la campanita 🔔"}'`);
+  }
 
   run(`CREATE INDEX IF NOT EXISTS media_sha_idx ON media(sha)`);
   run(`CREATE INDEX IF NOT EXISTS media_type_idx ON media(type)`);
   run(`CREATE INDEX IF NOT EXISTS shorts_status_idx ON shorts(status)`);
   run(`CREATE INDEX IF NOT EXISTS shorts_hook_idx ON shorts(hook_id)`);
 
-const hooks = [
-    '¿Necesitas un CV que realmente atraiga clientes?',
-  'Tu CV está perdiendo oportunidades... esto lo arregla',
-  'Cómo hacer un CV que consiga entrevistas en 24 horas',
-  'El error #1 que cometen todos al crear su CV',
-  'Plantilla de CV que triplica tus llamadas de RRHH',
-  'Sin experiencia pero necesitas un CV ganador...',
-  '¿Sabías que el 70% de los CV son rechazados por esto?',
-  'El secreto profesional para un CV perfecto...',
-  'Deja de hacer CV genéricos y empieza a destacar',
-  'La forma rápida de crear un CV profesional sin complicaciones',
-  'Esto cambió mi vida: CV sin experiencia',
-  'No pierdas más tiempo con CV aburridos',
-  '¿Quieres un CV que los reclutadores quieran leer?',
-  'El truco que funciona para CVs sin experiencia',
-  'Sin complicaciones, logra tu CV ideal en 1 hora',
-  '¿Cansado de que rechacen tu CV? Prueba esto',
-  'La diferencia entre un CV rechazado y uno aceptado',
-  'Lo que aprendí sobre CVs en una semana',
-  'Resultado garantizado: CV profesional en 1 día',
-  '¿Sabías que puedes hacer un CV ganador gratis?',
-  'El método definitivo para CV sin experiencia',
-  'Cómo logré un CV perfecto en solo 1 día',
-];
+  const hooks = [
+    '¿Necesitas crear un CV rápido?',
+    '¿Buscas la mejor forma de hacer X?',
+    'Este truco te va a ahorrar horas...',
+    'No creerás lo fácil que es...',
+    'El secreto que nadie te cuenta...',
+    '¿Por qué nadie te enseñó esto antes?',
+    'Deja de perder tiempo con...',
+    'La forma PRO de hacer X...',
+    'Esto cambió mi forma de trabajar...',
+    'El error que todos cometen...',
+  ];
 
   const hookStmt = db.prepare('INSERT OR IGNORE INTO hooks (id, text, is_active) VALUES (?, ?, 1)');
   hooks.forEach(text => {

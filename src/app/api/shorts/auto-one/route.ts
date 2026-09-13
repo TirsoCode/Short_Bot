@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { generateOneManualShort } from '@/lib/auto-generate';
+import { generateOneManualShort } from '@/lib/auto-shorts';
 
 export async function POST() {
   try {
     const result = await generateOneManualShort();
-    if (!result) {
-      return NextResponse.json({ success: false, error: 'No hay medios disponibles para generar un short' }, { status: 400 });
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
-    return NextResponse.json({ success: true, generated: 1, short: result });
+    return NextResponse.json({ success: true, hookText: result.hookText });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

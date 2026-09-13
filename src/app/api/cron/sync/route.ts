@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server';
-import { syncAndGenerate } from '@/lib/auto-generate';
+import { syncLocalMedia } from '@/lib/local-media';
 
 export async function GET() {
   try {
-    const result = await syncAndGenerate();
-    return NextResponse.json({
-      success: result.errors.length === 0,
-      synced: result.synced,
-      generated: result.generated,
-      errors: result.errors,
-    });
+    const result = await syncLocalMedia();
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Sync failed' },
       { status: 500 }
     );
   }
-}
-
-export async function POST() {
-  return GET();
 }

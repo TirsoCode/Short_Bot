@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { SessionProvider } from 'next-auth/react';
+import React, { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -13,163 +12,56 @@ import { MediaGrid } from '@/components/media/MediaGrid';
 import { HookManager } from '@/components/settings/HookManager';
 import { useMedia } from '@/hooks/useMedia';
 import { useShorts } from '@/hooks/useShorts';
+import { useMediaSync } from '@/hooks/useMediaSync';
 import { useGitHubSync } from '@/hooks/useGitHubSync';
 import { useToast } from '@/hooks/useToast';
 import { useRouter } from 'next/navigation';
-import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings, Zap, Play, Pause, BarChart3 } from 'lucide-react';
-import { AnalyticsPanel } from '@/components/settings/AnalyticsPanel';
+import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings, Zap } from 'lucide-react';
 import type { Short, MediaItem } from '@/types';
 
 function DashboardContent() {
-  const { media, isLoading: mediaLoading } = useMedia();
-  const { shorts, isLoading: shortsLoading, updateShortStatus, deleteShort } = useShorts();
-  const syncMutation = useGitHubSync();
+  const { data: media = [], isLoading: mediaLoading } = useMedia();
+  const { shorts, isLoading: shortsLoading, acceptShort, rejectShort, deleteShort } = useShorts();
+  const syncMutation = useMediaSync();
+  const gitSyncMutation = useGitHubSync();
   const { toast } = useToast();
   const router = useRouter();
-
-  const [schedulerRunning, setSchedulerRunning] = useState(false);
-  const [autoGenLoading, setAutoGenLoading] = useState(false);
   const [oneMoreLoading, setOneMoreLoading] = useState(false);
-  const [schedulerChecking, setSchedulerChecking] = useState(true);
-
-  useEffect(() => {
-    checkScheduler();
-  }, []);
-
-  const checkScheduler = async () => {
-    try {
-      const res = await fetch('/api/scheduler');
-      const data = await res.json();
-      setSchedulerRunning(data.running);
-    } catch {
-      setSchedulerRunning(false);
-    } finally {
-      setSchedulerChecking(false);
-    }
-  };
-
-  const toggleScheduler = async () => {
-    try {
-      const action = schedulerRunning ? 'stop' : 'start';
-      const res = await fetch('/api/scheduler', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSchedulerRunning(!schedulerRunning);
-        toast({
-          title: schedulerRunning ? 'Scheduler detenido' : 'Scheduler activado',
-          description: schedulerRunning ? 'La sincronización automática se ha detenido' : 'Sincronización diaria activada a las 19:00',
-          variant: 'success',
-        });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudo cambiar el scheduler', variant: 'destructive' });
-    }
-  };
-
-  const handleAutoGenerate = async () => {
-    setAutoGenLoading(true);
-    try {
-      const res = await fetch('/api/auto-generate', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast({
-          title: 'Auto-generación completa',
-          description: `${data.synced} medios sincronizados, ${data.generated} shorts generados`,
-          variant: 'success',
-        });
-      } else {
-        toast({
-          title: 'Auto-generación con errores',
-          description: data.errors?.join(', ') || 'Error desconocido',
-          variant: 'destructive',
-        });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudo auto-generar', variant: 'destructive' });
-    } finally {
-      setAutoGenLoading(false);
-    }
-  };
-
-  const handleGenerateOneMore = async () => {
-    setOneMoreLoading(true);
-    try {
-      const res = await fetch('/api/auto-generate/one', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast({
-          title: 'Short generado con IA',
-          description: data.short?.hookText || 'Short añadido a la cola de renderizado',
-          variant: 'success',
-        });
-      } else {
-        toast({
-          title: 'No se pudo generar',
-          description: data.error || 'Error desconocido',
-          variant: 'destructive',
-        });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudo generar el short', variant: 'destructive' });
-    } finally {
-      setOneMoreLoading(false);
-    }
-  };
 
   const draftShorts = shorts.filter(s => s.status === 'draft');
-  const renderingShorts = shorts.filter(s => s.status === 'rendering');
   const renderedShorts = shorts.filter(s => s.status === 'rendered');
   const acceptedShorts = shorts.filter(s => s.status === 'accepted');
   const publishedShorts = shorts.filter(s => s.status === 'published');
   const rejectedShorts = shorts.filter(s => s.status === 'rejected');
   const failedShorts = shorts.filter(s => s.status === 'failed');
-  const autoGeneratedShorts = shorts.filter(s => s.tags?.includes('auto'));
-  const pendingReview = [...renderedShorts, ...draftShorts, ...failedShorts];
+  const allShorts = [...renderedShorts, ...draftShorts, ...failedShorts];
 
-  const handleSync = async () => {
+  const handleSync = async (mutation: { mutateAsync: () => Promise<{ success: boolean; newMediaCount: number; errors: string[] }> }, okTitle: string) => {
     try {
-      const result = await syncMutation.mutateAsync();
+      const result = await mutation.mutateAsync();
       if (result.success) {
-        toast({ title: 'Sync completo', description: `${result.newMediaCount} medios nuevos`, variant: 'success' });
+        toast({ title: okTitle, description: `${result.newMediaCount} medios nuevos`, variant: 'success' });
       } else {
-        toast({ title: 'Sync con errores', description: result.errors.join(', '), variant: 'destructive' });
+        toast({ title: `${okTitle} con errores`, description: result.errors.join(', '), variant: 'destructive' });
       }
     } catch {
-      toast({ title: 'Error', description: 'No se pudo sincronizar', variant: 'destructive' });
+      toast({ title: 'Error', description: 'No se pudieron importar los medios', variant: 'destructive' });
     }
   };
 
   const handleAccept = async (id: string) => {
     try {
-      await updateShortStatus(id, 'accepted');
-      toast({ title: 'Aceptado', description: 'Short aceptado. Haz clic en "Subir a YouTube" para publicar.', variant: 'success' });
+      await acceptShort(id);
+      toast({ title: 'Aceptado', description: 'Subiendo a YouTube...', variant: 'success' });
     } catch {
       toast({ title: 'Error', description: 'No se pudo aceptar', variant: 'destructive' });
-    }
-  };
-
-  const handleUpload = async (id: string) => {
-    try {
-      const res = await fetch(`/api/shorts/${id}/upload`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast({ title: 'Subido a YouTube', description: `URL: ${data.url}`, variant: 'success' });
-      } else {
-        toast({ title: 'Error', description: data.error, variant: 'destructive' });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudo subir a YouTube', variant: 'destructive' });
     }
   };
 
   const handleReject = async (id: string) => {
     const reason = prompt('Motivo del rechazo:');
     try {
-      await updateShortStatus(id, 'rejected', { rejectReason: reason || '' });
+      await rejectShort(id, reason || '');
       toast({ title: 'Rechazado', description: 'Short eliminado de la cola', variant: 'default' });
     } catch {
       toast({ title: 'Error', description: 'No se pudo rechazar', variant: 'destructive' });
@@ -186,6 +78,27 @@ function DashboardContent() {
     }
   };
 
+  const handleGenerateOneMore = async () => {
+    setOneMoreLoading(true);
+    try {
+      const res = await fetch('/api/shorts/auto-one', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'Short generado con IA',
+          description: data.hookText || 'Short añadido a la cola de renderizado (OpenCode Zen)',
+          variant: 'success',
+        });
+      } else {
+        toast({ title: 'No se pudo generar', description: data.error || 'Error desconocido', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo generar el short', variant: 'destructive' });
+    } finally {
+      setOneMoreLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b sticky top-0 z-40">
@@ -195,68 +108,29 @@ function DashboardContent() {
               <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
             </div>
             <h1 className="text-xl font-bold">Short Bot</h1>
-            {schedulerRunning && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                <Play className="h-3 w-3 mr-1" /> Auto
-              </Badge>
-            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant={schedulerRunning ? "destructive" : "outline"}
-              size="sm"
-              onClick={toggleScheduler}
-              disabled={schedulerChecking}
-            >
-              {schedulerChecking ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : schedulerRunning ? (
-                <Pause className="h-4 w-4 mr-2" />
-              ) : (
-                <Play className="h-4 w-4 mr-2" />
-              )}
-              {schedulerRunning ? 'Detener Auto' : 'Activar Auto'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAutoGenerate}
-              disabled={autoGenLoading}
-            >
-              {autoGenLoading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Zap className="h-4 w-4 mr-2" />
-              )}
-              Generar Ahora
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleGenerateOneMore}
-              disabled={oneMoreLoading}
-              title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario"
-            >
-              {oneMoreLoading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              Generar uno más (IA)
-            </Button>
             <Button variant="outline" size="sm" onClick={() => router.push('/settings')}>
               <Settings className="h-4 w-4 mr-2" /> Configuración
             </Button>
-            <Button size="sm" onClick={handleSync} disabled={syncMutation.isPending}>
-              {syncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            <Button size="sm" variant="outline" onClick={() => handleSync(gitSyncMutation, 'Sync GitHub')} disabled={gitSyncMutation.isPending}>
+              {gitSyncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Sync GitHub
+            </Button>
+            <Button size="sm" onClick={() => handleSync(syncMutation, 'Importación completa')} disabled={syncMutation.isPending}>
+              {syncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Importar
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleGenerateOneMore} disabled={oneMoreLoading} title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario">
+              {oneMoreLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+              Generar uno más (IA)
             </Button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid gap-4 mb-6 grid-cols-2 md:grid-cols-5">
+        <div className="grid gap-4 mb-6 grid-cols-2 md:grid-cols-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center"><Image className="h-5 w-5 text-blue-600" /></div>
@@ -266,13 +140,7 @@ function DashboardContent() {
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center"><Video className="h-5 w-5 text-yellow-600" /></div>
-              <div><p className="text-2xl font-bold">{pendingReview.length}</p><p className="text-xs text-muted-foreground">Pendientes</p></div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center"><Zap className="h-5 w-5 text-purple-600" /></div>
-              <div><p className="text-2xl font-bold">{autoGeneratedShorts.length}</p><p className="text-xs text-muted-foreground">Auto-gen</p></div>
+              <div><p className="text-2xl font-bold">{allShorts.length}</p><p className="text-xs text-muted-foreground">Borradores</p></div>
             </CardContent>
           </Card>
           <Card>
@@ -291,36 +159,25 @@ function DashboardContent() {
 
         <Tabs defaultValue="review" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="review">Revisar ({pendingReview.length})</TabsTrigger>
+            <TabsTrigger value="review">Revisar ({allShorts.length})</TabsTrigger>
             <TabsTrigger value="create">Crear Short</TabsTrigger>
             <TabsTrigger value="media">Medios ({media.length})</TabsTrigger>
             <TabsTrigger value="hooks">Frases Gancho</TabsTrigger>
-            <TabsTrigger value="analytics"><BarChart3 className="h-4 w-4 mr-1" />Analytics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="review">
             {shortsLoading ? (
               <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-            ) : pendingReview.length === 0 ? (
-              <Card className="py-12 text-center">
-                <CardContent>
-                  <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground mb-2">No hay shorts pendientes de revisión</p>
-                  <p className="text-sm text-muted-foreground">
-                    Sube fotos y videos a las carpetas <code>fotos/</code> y <code>videos/</code> del repo,
-                    luego haz clic en "Generar Ahora" o activa el modo automático.
-                  </p>
-                </CardContent>
-              </Card>
+            ) : allShorts.length === 0 ? (
+              <Card className="py-12 text-center"><CardContent><p className="text-muted-foreground">No hay shorts pendientes. Crea uno nuevo o sincroniza medios.</p></CardContent></Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {pendingReview.map(short => (
+                {allShorts.map(short => (
                   <ShortCard
                     key={short.id}
                     short={short}
                     onAccept={handleAccept}
                     onReject={handleReject}
-                    onUpload={handleUpload}
                     onEdit={() => {}}
                     onDelete={handleDelete}
                   />
@@ -344,10 +201,6 @@ function DashboardContent() {
           <TabsContent value="hooks">
             <HookManager />
           </TabsContent>
-
-          <TabsContent value="analytics">
-            <AnalyticsPanel />
-          </TabsContent>
         </Tabs>
       </main>
     </div>
@@ -360,10 +213,8 @@ export default function DashboardPage() {
   }));
 
   return (
-    <SessionProvider>
-      <QueryClientProvider client={queryClient}>
-        <DashboardContent />
-      </QueryClientProvider>
-    </SessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <DashboardContent />
+    </QueryClientProvider>
   );
 }
