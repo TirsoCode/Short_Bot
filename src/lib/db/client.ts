@@ -7,21 +7,44 @@ let db: SqlJsDatabase | null = null;
 
 const dbPath = path.join(dataDir, 'shortbot.db');
 
+const WASM_FILENAME = 'sql-wasm.wasm';
 const WASM_CANDIDATES = [
-  path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-  path.join(process.cwd(), 'public', 'sql-wasm.wasm'),
-  path.join(process.cwd(), 'data', 'sql-wasm.wasm'),
+  path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', WASM_FILENAME),
+  path.join(process.cwd(), 'public', WASM_FILENAME),
+  path.join(process.cwd(), 'data', WASM_FILENAME),
 ];
 
-function loadWasmBinary(): Uint8Array {
+async function loadWasmBinary(): Promise<Uint8Array> {
   for (const candidate of WASM_CANDIDATES) {
-    if (fs.existsSync(candidate)) {
-      return new Uint8Array(fs.readFileSync(candidate));
+    try {
+      if (fs.existsSync(candidate)) {
+        return new Uint8Array(fs.readFileSync(candidate));
+      }
+    } catch {
+      // intentar con el siguiente candidato
     }
   }
+  try {
+    const url = new URL(`/${WASM_FILENAME}`, getBaseUrl());
+    const response = await fetch(url.toString());
+    if (response.ok) {
+      return new Uint8Array(await response.arrayBuffer());
+    }
+  } catch {
+    // sin conexión o sin servidor de estáticos: reportar más abajo
+  }
   throw new Error(
-    `No se encontró el binario sql-wasm.wasm (buscado en: ${WASM_CANDIDATES.join(', ')}). Reinstala sql.js o ejecuta npm run db:init.`
+    `No se encontró el binario ${WASM_FILENAME} (buscado en: ${WASM_CANDIDATES.join(', ')}). Reinstala sql.js, ejecuta npm run db:init o conserva el archivo en /public.`
   );
+}
+
+function getBaseUrl(): string {
+  const explicit = process.env.BASE_URL || process.env.VERCEL_URL || process.env.NEXTAUTH_URL;
+  if (explicit) {
+    const cleaned = explicit.startsWith('http') ? explicit : `https://${explicit}`;
+    return cleaned.replace(/\/+$/, '');
+  }
+  return 'http://localhost:3000';
 }
 
 function saveDb() {
@@ -34,7 +57,7 @@ function saveDb() {
 export async function getDb(): Promise<SqlJsDatabase> {
   if (db) return db;
 
-  const SQL = await initSqlJs({ wasmBinary: loadWasmBinary() });
+  const SQL = await initSqlJs({ wasmBinary: await loadWasmBinary() });
   ensureDirs();
   const isNew = !fs.existsSync(dbPath);
   const database = isNew ? new SQL.Database() : new SQL.Database(fs.readFileSync(dbPath));

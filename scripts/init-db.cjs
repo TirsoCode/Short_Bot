@@ -8,6 +8,9 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const wasmSrc = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
 if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, path.join(dataDir, 'sql-wasm.wasm'));
+  const publicDir = path.join(__dirname, '..', 'public');
+  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+  fs.copyFileSync(wasmSrc, path.join(publicDir, 'sql-wasm.wasm'));
 }
 
 const dbPath = path.join(dataDir, 'shortbot.db');
