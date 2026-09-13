@@ -69,6 +69,21 @@ export async function getDb(): Promise<SqlJsDatabase> {
   return database;
 }
 
+function detectDefaultGitHub(): { owner: string; repo: string; branch: string } | null {
+  try {
+    const configPath = path.join(process.cwd(), '.git', 'config');
+    if (!fs.existsSync(configPath)) return null;
+    const config = fs.readFileSync(configPath, 'utf8');
+    const urlMatch = config.match(/url\s*=\s*(.+)/);
+    if (!urlMatch) return null;
+    let url = urlMatch[1].trim().replace(/\.git$/, '');
+    const m = url.match(/github\.com[:/]([^/]+)\/([^/]+)/);
+    if (!m) return null;
+    const branchMatch = config.match(/\[branch\s+"([^"]+)"\]/);
+    return { owner: m[1], repo: m[2], branch: branchMatch ? branchMatch[1] : 'main' };
+  } catch { return null; }
+}
+
 function ensureColumn(database: SqlJsDatabase, table: string, column: string, ddl: string) {
   const info = database.exec(`PRAGMA table_info(${table})`);
   const columns = info.length ? info[0].values.map(row => row[1]) : [];
@@ -96,7 +111,11 @@ function initSchema(database: SqlJsDatabase) {
   const existingSettings = database.exec("SELECT 1 FROM settings WHERE id = 'default'");
   if (existingSettings.length === 0 || existingSettings[0].values.length === 0) {
     const ghToken = process.env.GITHUB_TOKEN || '';
-    database.run("INSERT INTO settings (id, github_token) VALUES ('default', ?)", [ghToken]);
+    const detected = detectDefaultGitHub();
+    database.run(
+      "INSERT INTO settings (id, github_token, github_owner, github_repo, github_branch) VALUES ('default', ?, ?, ?, ?)",
+      [ghToken, detected?.owner || '', detected?.repo || '', detected?.branch || 'main']
+    );
   }
 
   const hookCount = database.exec('SELECT COUNT(*) AS c FROM hooks');

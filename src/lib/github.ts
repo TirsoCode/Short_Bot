@@ -77,13 +77,60 @@ export class GitHubClient {
 
   static async createFromSettings() {
     const s = await settingsQueries.find();
-    if (!s || !s.github_token || !s.github_owner || !s.github_repo) return null;
-    return new GitHubClient(s.github_token, s.github_owner, s.github_repo, s.github_branch, s.githubPaths);
+    const token = (s?.github_token || process.env.GITHUB_TOKEN || '').trim();
+    let owner = (s?.github_owner || process.env.GITHUB_OWNER || '').trim();
+    let repo = (s?.github_repo || process.env.GITHUB_REPO || '').trim();
+    let branch = (s?.github_branch || process.env.GITHUB_BRANCH || 'main').trim() || 'main';
+    const githubPaths = s?.githubPaths?.length ? s.githubPaths : ['videos', 'fotos'];
+
+    if (!owner || !repo) {
+      const detected = detectFromGitRemote();
+      if (detected) {
+        owner = owner || detected.owner;
+        repo = repo || detected.repo;
+        if (!branch || branch === 'main') branch = detected.branch || 'main';
+      }
+    }
+
+    if (!owner || !repo) return null;
+    // Repos públicos no necesitan token; si no hay token, se lee sin autenticar.
+    return new GitHubClient(token, owner, repo, branch, githubPaths);
+  }
+}
+
+function detectFromGitRemote(): { owner: string; repo: string; branch: string } | null {
+  try {
+    const gitPath = path.join(process.cwd(), '.git');
+    if (!fs.existsSync(gitPath)) return null;
+    const config = fs.readFileSync(path.join(gitPath, 'config'), 'utf8');
+    const urlMatch = config.match(/url\s*=\s*(.+)/);
+    if (!urlMatch) return null;
+    let url = urlMatch[1].trim();
+    url = url.replace(/\.git$/, '').replace(/\/+$/, '');
+    let owner = '';
+    let repo = '';
+    if (url.includes('github.com')) {
+      const m = url.match(/github\.com[:/]([^/]+)\/([^/]+)/);
+      if (!m) return null;
+      owner = m[1];
+      repo = m[2];
+    } else {
+      const parts = url.split(/[:/]/).filter(Boolean);
+      if (parts.length >= 2) {
+        owner = parts[parts.length - 2];
+        repo = parts[parts.length - 1];
+      }
+    }
+    const branchMatch = config.match(/\[branch\s+"([^"]+)"\]/);
+    const branch = branchMatch ? branchMatch[1] : 'main';
+    return owner && repo ? { owner, repo, branch } : null;
+  } catch {
+    return null;
   }
 }
 
 export async function syncGitHubMedia() {
   const client = await GitHubClient.createFromSettings();
-  if (!client) return { success: false, newMediaCount: 0, errors: ['GitHub not configured'] };
+  if (!client) return { success: false, newMediaCount: 0, errors: ['GitHub not configured: no se pudo detectar owner/repo. Configúralo en Ajustes o en GITHUB_OWNER/GITHUB_REPO'] };
   return client.syncMedia();
 }
