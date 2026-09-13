@@ -81,7 +81,7 @@ export async function generateAutoShort(publish: boolean): Promise<boolean> {
   });
   if (!short) return false;
 
-  await renderQueue.add(short.id);
+  renderQueue.add(short.id).catch(() => {});
   if (publish) await shortQueries.updateStatus(short.id, 'accepted');
   return true;
 }
@@ -126,7 +126,7 @@ export async function generateOneManualShort(): Promise<{ success: boolean; hook
   });
   if (!short) return { success: false, error: 'No se pudo crear el short' };
 
-  await renderQueue.add(short.id);
+  renderQueue.add(short.id).catch(() => {});
   return { success: true, hookText };
 }
 
