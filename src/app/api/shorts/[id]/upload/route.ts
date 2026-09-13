@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await shortQueries.updateStatus(id, 'uploading');
 
-    const youtube = new YouTubeClient(tokens);
+    const youtube = await YouTubeClient.create(tokens);
     const url = await youtube.uploadShort(short, short.renderedPath);
 
     await shortQueries.updateStatus(id, 'published', {
