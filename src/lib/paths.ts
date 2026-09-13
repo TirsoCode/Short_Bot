@@ -7,7 +7,20 @@ export function publicToFsPath(publicPath: string): string {
   return path.join(process.cwd(), 'public', publicPath.replace(/^\/+/, ''));
 }
 
-export const dataDir = path.join(os.tmpdir(), 'shortbot');
+function pickDataDir(): string {
+  const project = path.join(process.cwd(), 'data');
+  try {
+    fs.mkdirSync(project, { recursive: true });
+    const probe = path.join(project, '.write-test');
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return project;
+  } catch {
+    return path.join(os.tmpdir(), 'shortbot');
+  }
+}
+
+export const dataDir = pickDataDir();
 export const mediaDir = path.join(dataDir, 'media');
 export const rendersDir = path.join(dataDir, 'renders');
 

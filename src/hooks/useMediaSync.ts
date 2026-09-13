@@ -2,8 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 async function syncMedia(): Promise<{ success: boolean; newMediaCount: number; errors: string[] }> {
   const res = await fetch('/api/media/sync', { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to sync');
-  return res.json();
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.errors?.[0] || 'Failed to sync');
+  return data;
 }
 
 export function useMediaSync() {

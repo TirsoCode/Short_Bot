@@ -7,6 +7,23 @@ let db: SqlJsDatabase | null = null;
 
 const dbPath = path.join(dataDir, 'shortbot.db');
 
+const WASM_CANDIDATES = [
+  path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+  path.join(process.cwd(), 'public', 'sql-wasm.wasm'),
+  path.join(process.cwd(), 'data', 'sql-wasm.wasm'),
+];
+
+function loadWasmBinary(): Uint8Array {
+  for (const candidate of WASM_CANDIDATES) {
+    if (fs.existsSync(candidate)) {
+      return new Uint8Array(fs.readFileSync(candidate));
+    }
+  }
+  throw new Error(
+    `No se encontró el binario sql-wasm.wasm (buscado en: ${WASM_CANDIDATES.join(', ')}). Reinstala sql.js o ejecuta npm run db:init.`
+  );
+}
+
 function saveDb() {
   if (!db) return;
   ensureDirs();
@@ -17,7 +34,8 @@ function saveDb() {
 export async function getDb(): Promise<SqlJsDatabase> {
   if (db) return db;
 
-  const SQL = await initSqlJs();
+  const SQL = await initSqlJs({ wasmBinary: loadWasmBinary() });
+  ensureDirs();
   const isNew = !fs.existsSync(dbPath);
   const database = isNew ? new SQL.Database() : new SQL.Database(fs.readFileSync(dbPath));
   db = database;

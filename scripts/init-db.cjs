@@ -5,6 +5,11 @@ const fs = require('fs');
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
+const wasmSrc = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+if (fs.existsSync(wasmSrc)) {
+  fs.copyFileSync(wasmSrc, path.join(dataDir, 'sql-wasm.wasm'));
+}
+
 const dbPath = path.join(dataDir, 'shortbot.db');
 
 async function initDb() {

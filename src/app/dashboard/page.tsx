@@ -16,7 +16,7 @@ import { useMediaSync } from '@/hooks/useMediaSync';
 import { useGitHubSync } from '@/hooks/useGitHubSync';
 import { useToast } from '@/hooks/useToast';
 import { useRouter } from 'next/navigation';
-import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings, Zap } from 'lucide-react';
+import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings } from 'lucide-react';
 import type { Short, MediaItem } from '@/types';
 
 function DashboardContent() {
@@ -26,7 +26,6 @@ function DashboardContent() {
   const gitSyncMutation = useGitHubSync();
   const { toast } = useToast();
   const router = useRouter();
-  const [oneMoreLoading, setOneMoreLoading] = useState(false);
 
   const draftShorts = shorts.filter(s => s.status === 'draft');
   const renderedShorts = shorts.filter(s => s.status === 'rendered');
@@ -44,8 +43,8 @@ function DashboardContent() {
       } else {
         toast({ title: `${okTitle} con errores`, description: result.errors.join(', '), variant: 'destructive' });
       }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudieron importar los medios', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'No se pudieron importar los medios', variant: 'destructive' });
     }
   };
 
@@ -78,27 +77,6 @@ function DashboardContent() {
     }
   };
 
-  const handleGenerateOneMore = async () => {
-    setOneMoreLoading(true);
-    try {
-      const res = await fetch('/api/shorts/auto-one', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast({
-          title: 'Short generado con IA',
-          description: data.hookText || 'Short añadido a la cola de renderizado (OpenCode Zen)',
-          variant: 'success',
-        });
-      } else {
-        toast({ title: 'No se pudo generar', description: data.error || 'Error desconocido', variant: 'destructive' });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'No se pudo generar el short', variant: 'destructive' });
-    } finally {
-      setOneMoreLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b sticky top-0 z-40">
@@ -120,10 +98,6 @@ function DashboardContent() {
             <Button size="sm" onClick={() => handleSync(syncMutation, 'Importación completa')} disabled={syncMutation.isPending}>
               {syncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Importar
-            </Button>
-            <Button variant="secondary" size="sm" onClick={handleGenerateOneMore} disabled={oneMoreLoading} title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario">
-              {oneMoreLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
-              Generar uno más (IA)
             </Button>
           </div>
         </div>

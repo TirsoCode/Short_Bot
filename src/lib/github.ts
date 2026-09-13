@@ -35,25 +35,32 @@ export class GitHubClient {
     const errors: string[] = [];
     let newMediaCount = 0;
     try {
-      const contents = await this.octokit.repos.getContent({ owner: this.owner, repo: this.repo, path: dirPath, ref: this.branch });
+      const contents = await this.octokit.rest.repos.getContent({ owner: this.owner, repo: this.repo, path: dirPath, ref: this.branch });
       const items = Array.isArray(contents.data) ? contents.data : [contents.data];
       for (const item of items) {
-        if (item.type === 'file' && 'name' in item && 'sha' in item && 'size' in item && 'download_url' in item && 'html_url' in item) {
+        if (item.type === 'file' && 'name' in item && 'sha' in item && 'size' in item && 'path' in item) {
           const mediaType = getMediaType(item.name);
           if (mediaType !== 'unknown') {
             const exists = await mediaQueries.findBySha(item.sha);
-            if (!exists && item.download_url) {
-              const response = await fetch(item.download_url);
-              if (response.ok) {
-                const buf = Buffer.from(await response.arrayBuffer());
-                ensureDirs();
-                if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
-                const ext = path.extname(item.name);
-                const filename = `${generateId()}${ext}`;
-                fs.writeFileSync(path.join(mediaDir, filename), buf);
-                await mediaQueries.create({ id: generateId(), name: item.name, path: item.path, type: mediaType, size: item.size, sha: item.sha, url: item.html_url, downloadedPath: `/api/media/stream/${filename}` });
-                newMediaCount++;
-              }
+            if (exists) continue;
+            try {
+              const response = await this.octokit.rest.repos.getContent({
+                owner: this.owner,
+                repo: this.repo,
+                path: item.path,
+                ref: this.branch,
+                mediaType: { format: 'raw' },
+              });
+              const buf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data as any);
+              ensureDirs();
+              if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
+              const ext = path.extname(item.name);
+              const filename = `${generateId()}${ext}`;
+              fs.writeFileSync(path.join(mediaDir, filename), buf);
+              await mediaQueries.create({ id: generateId(), name: item.name, path: item.path, type: mediaType, size: item.size, sha: item.sha, url: item.html_url, downloadedPath: `/api/media/stream/${filename}` });
+              newMediaCount++;
+            } catch (error: any) {
+              errors.push(`Failed to download ${item.name}: ${error.message}`);
             }
           }
         } else if (item.type === 'dir' && 'path' in item) {
