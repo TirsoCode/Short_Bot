@@ -46,6 +46,7 @@ export const ShortCard: React.FC<ShortCardProps> = ({
   onReject,
   onEdit,
   onDelete,
+  onUpload,
   isRendering,
 }) => {
   const statusColor = statusColors[short.status];
