@@ -1,5 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import { mediaQueries, settingsQueries } from '@/lib/db/queries';
+import { mediaQueries } from '@/lib/db/queries';
 import { getMediaType, generateId } from '@/lib/utils';
 import { mediaDir, ensureDirs } from '@/lib/paths';
 import fs from 'fs';
@@ -13,7 +13,9 @@ export class GitHubClient {
   private paths: string[];
 
   constructor(token: string, owner: string, repo: string, branch: string, paths: string[]) {
-    this.octokit = new Octokit({ auth: token });
+    this.octokit = token
+      ? new Octokit({ auth: token })
+      : new Octokit();
     this.owner = owner;
     this.repo = repo;
     this.branch = branch;
@@ -35,32 +37,25 @@ export class GitHubClient {
     const errors: string[] = [];
     let newMediaCount = 0;
     try {
-      const contents = await this.octokit.rest.repos.getContent({ owner: this.owner, repo: this.repo, path: dirPath, ref: this.branch });
+      const contents = await this.octokit.repos.getContent({ owner: this.owner, repo: this.repo, path: dirPath, ref: this.branch });
       const items = Array.isArray(contents.data) ? contents.data : [contents.data];
       for (const item of items) {
-        if (item.type === 'file' && 'name' in item && 'sha' in item && 'size' in item && 'path' in item) {
+        if (item.type === 'file' && 'name' in item && 'sha' in item && 'size' in item && 'download_url' in item && 'html_url' in item) {
           const mediaType = getMediaType(item.name);
           if (mediaType !== 'unknown') {
             const exists = await mediaQueries.findBySha(item.sha);
-            if (exists) continue;
-            try {
-              const response = await this.octokit.rest.repos.getContent({
-                owner: this.owner,
-                repo: this.repo,
-                path: item.path,
-                ref: this.branch,
-                mediaType: { format: 'raw' },
-              });
-              const buf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data as any);
-              ensureDirs();
-              if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
-              const ext = path.extname(item.name);
-              const filename = `${generateId()}${ext}`;
-              fs.writeFileSync(path.join(mediaDir, filename), buf);
-              await mediaQueries.create({ id: generateId(), name: item.name, path: item.path, type: mediaType, size: item.size, sha: item.sha, url: item.html_url, downloadedPath: `/api/media/stream/${filename}` });
-              newMediaCount++;
-            } catch (error: any) {
-              errors.push(`Failed to download ${item.name}: ${error.message}`);
+            if (!exists && item.download_url) {
+              const response = await fetch(item.download_url);
+              if (response.ok) {
+                const buf = Buffer.from(await response.arrayBuffer());
+                ensureDirs();
+                if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
+                const ext = path.extname(item.name);
+                const filename = `${generateId()}${ext}`;
+                fs.writeFileSync(path.join(mediaDir, filename), buf);
+                await mediaQueries.create({ id: generateId(), name: item.name, path: item.path, type: mediaType, size: item.size, sha: item.sha, url: item.html_url, downloadedPath: `/api/media/stream/${filename}` });
+                newMediaCount++;
+              }
             }
           }
         } else if (item.type === 'dir' && 'path' in item) {
@@ -76,61 +71,12 @@ export class GitHubClient {
   }
 
   static async createFromSettings() {
-    const s = await settingsQueries.find();
-    const token = (s?.github_token || process.env.GITHUB_TOKEN || '').trim();
-    let owner = (s?.github_owner || process.env.GITHUB_OWNER || '').trim();
-    let repo = (s?.github_repo || process.env.GITHUB_REPO || '').trim();
-    let branch = (s?.github_branch || process.env.GITHUB_BRANCH || 'main').trim() || 'main';
-    const githubPaths = s?.githubPaths?.length ? s.githubPaths : ['videos', 'fotos'];
-
-    if (!owner || !repo) {
-      const detected = detectFromGitRemote();
-      if (detected) {
-        owner = owner || detected.owner;
-        repo = repo || detected.repo;
-        if (!branch || branch === 'main') branch = detected.branch || 'main';
-      }
-    }
-
-    if (!owner || !repo) return null;
-    // Repos públicos no necesitan token; si no hay token, se lee sin autenticar.
-    return new GitHubClient(token, owner, repo, branch, githubPaths);
-  }
-}
-
-function detectFromGitRemote(): { owner: string; repo: string; branch: string } | null {
-  try {
-    const gitPath = path.join(process.cwd(), '.git');
-    if (!fs.existsSync(gitPath)) return null;
-    const config = fs.readFileSync(path.join(gitPath, 'config'), 'utf8');
-    const urlMatch = config.match(/url\s*=\s*(.+)/);
-    if (!urlMatch) return null;
-    let url = urlMatch[1].trim();
-    url = url.replace(/\.git$/, '').replace(/\/+$/, '');
-    let owner = '';
-    let repo = '';
-    if (url.includes('github.com')) {
-      const m = url.match(/github\.com[:/]([^/]+)\/([^/]+)/);
-      if (!m) return null;
-      owner = m[1];
-      repo = m[2];
-    } else {
-      const parts = url.split(/[:/]/).filter(Boolean);
-      if (parts.length >= 2) {
-        owner = parts[parts.length - 2];
-        repo = parts[parts.length - 1];
-      }
-    }
-    const branchMatch = config.match(/\[branch\s+"([^"]+)"\]/);
-    const branch = branchMatch ? branchMatch[1] : 'main';
-    return owner && repo ? { owner, repo, branch } : null;
-  } catch {
-    return null;
+    return new GitHubClient(process.env.GITHUB_TOKEN || '', 'TirsoCode', 'short_bot', 'main', ['videos', 'fotos']);
   }
 }
 
 export async function syncGitHubMedia() {
   const client = await GitHubClient.createFromSettings();
-  if (!client) return { success: false, newMediaCount: 0, errors: ['GitHub not configured: no se pudo detectar owner/repo. Configúralo en Ajustes o en GITHUB_OWNER/GITHUB_REPO'] };
+  if (!client) return { success: false, newMediaCount: 0, errors: ['GitHub not configured'] };
   return client.syncMedia();
 }

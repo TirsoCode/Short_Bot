@@ -5,12 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import { rendersDir, mediaDir, ensureDirs } from '@/lib/paths';
 
-function resolveRemotionCmd(): string {
-  const localBin = path.join(process.cwd(), 'remotion', 'node_modules', '.bin', 'remotion');
-  if (fs.existsSync(localBin)) return `"${localBin}"`;
-  return 'npx remotion';
-}
-
 export async function renderShort(shortId: string, onProgress?: (progress: number) => void) {
   const short = await shortQueries.findById(shortId);
   if (!short) throw new Error('Short not found');
@@ -48,7 +42,7 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
 
   onProgress?.(10);
   try {
-    execSync(`${resolveRemotionCmd()} render src/index.ts ShortComposition "${outputPath}" --props="${propsPath}" --concurrency=1`, {
+    execSync(`npx remotion render src/index.tsx ShortComposition "${outputPath}" --props="${propsPath}" --concurrency=1`, {
       cwd: path.join(process.cwd(), 'remotion'),
       stdio: 'pipe',
     });

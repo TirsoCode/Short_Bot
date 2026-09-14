@@ -14,9 +14,10 @@ import { useMedia } from '@/hooks/useMedia';
 import { useShorts } from '@/hooks/useShorts';
 import { useMediaSync } from '@/hooks/useMediaSync';
 import { useGitHubSync } from '@/hooks/useGitHubSync';
+import { useBufferPublish } from '@/hooks/useBuffer';
 import { useToast } from '@/hooks/useToast';
 import { useRouter } from 'next/navigation';
-import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings } from 'lucide-react';
+import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings, Zap } from 'lucide-react';
 import type { Short, MediaItem } from '@/types';
 
 function DashboardContent() {
@@ -24,8 +25,10 @@ function DashboardContent() {
   const { shorts, isLoading: shortsLoading, acceptShort, rejectShort, deleteShort } = useShorts();
   const syncMutation = useMediaSync();
   const gitSyncMutation = useGitHubSync();
+  const bufferPublish = useBufferPublish();
   const { toast } = useToast();
   const router = useRouter();
+  const [oneMoreLoading, setOneMoreLoading] = useState(false);
 
   const draftShorts = shorts.filter(s => s.status === 'draft');
   const renderedShorts = shorts.filter(s => s.status === 'rendered');
@@ -43,17 +46,26 @@ function DashboardContent() {
       } else {
         toast({ title: `${okTitle} con errores`, description: result.errors.join(', '), variant: 'destructive' });
       }
-    } catch (error: any) {
-      toast({ title: 'Error', description: error?.message || 'No se pudieron importar los medios', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Error', description: 'No se pudieron importar los medios', variant: 'destructive' });
     }
   };
 
   const handleAccept = async (id: string) => {
     try {
       await acceptShort(id);
-      toast({ title: 'Aceptado', description: 'Subiendo a YouTube...', variant: 'success' });
+      toast({ title: 'Aceptado', description: 'Listo para publicar con Buffer (columna "Revisar")', variant: 'success' });
     } catch {
       toast({ title: 'Error', description: 'No se pudo aceptar', variant: 'destructive' });
+    }
+  };
+
+  const handlePublish = async (id: string) => {
+    try {
+      await bufferPublish.mutateAsync({ shortId: id });
+      toast({ title: 'Enviado a Buffer', description: 'El short se añadió a la cola de publicación', variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Buffer: error al publicar', description: err.message || 'Error desconocido', variant: 'destructive' });
     }
   };
 
@@ -74,6 +86,27 @@ function DashboardContent() {
       toast({ title: 'Eliminado', variant: 'default' });
     } catch {
       toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateOneMore = async () => {
+    setOneMoreLoading(true);
+    try {
+      const res = await fetch('/api/shorts/auto-one', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'Short generado con IA',
+          description: data.hookText || 'Short añadido a la cola de renderizado (OpenCode Zen)',
+          variant: 'success',
+        });
+      } else {
+        toast({ title: 'No se pudo generar', description: data.error || 'Error desconocido', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo generar el short', variant: 'destructive' });
+    } finally {
+      setOneMoreLoading(false);
     }
   };
 
@@ -98,6 +131,10 @@ function DashboardContent() {
             <Button size="sm" onClick={() => handleSync(syncMutation, 'Importación completa')} disabled={syncMutation.isPending}>
               {syncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Importar
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleGenerateOneMore} disabled={oneMoreLoading} title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario">
+              {oneMoreLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+              Generar uno más (IA)
             </Button>
           </div>
         </div>
@@ -153,6 +190,7 @@ function DashboardContent() {
                     onAccept={handleAccept}
                     onReject={handleReject}
                     onEdit={() => {}}
+                    onUpload={handlePublish}
                     onDelete={handleDelete}
                   />
                 ))}

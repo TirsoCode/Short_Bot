@@ -5,14 +5,6 @@ const fs = require('fs');
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-const wasmSrc = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-if (fs.existsSync(wasmSrc)) {
-  fs.copyFileSync(wasmSrc, path.join(dataDir, 'sql-wasm.wasm'));
-  const publicDir = path.join(__dirname, '..', 'public');
-  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-  fs.copyFileSync(wasmSrc, path.join(publicDir, 'sql-wasm.wasm'));
-}
-
 const dbPath = path.join(dataDir, 'shortbot.db');
 
 async function initDb() {
@@ -35,6 +27,15 @@ async function initDb() {
   run(`CREATE TABLE IF NOT EXISTS youtube_tokens (id TEXT PRIMARY KEY DEFAULT 'default', access_token TEXT NOT NULL, refresh_token TEXT NOT NULL, expiry_date INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)`);
 
   const settingsColumns = db.exec(`PRAGMA table_info(settings)`)[0].values.map(row => row[1]);
+  if (!settingsColumns.includes('buffer_api_key')) {
+    run(`ALTER TABLE settings ADD COLUMN buffer_api_key TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!settingsColumns.includes('buffer_channel_id')) {
+    run(`ALTER TABLE settings ADD COLUMN buffer_channel_id TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!settingsColumns.includes('buffer_video_base_url')) {
+    run(`ALTER TABLE settings ADD COLUMN buffer_video_base_url TEXT NOT NULL DEFAULT ''`);
+  }
   if (!settingsColumns.includes('media_paths')) {
     run(`ALTER TABLE settings ADD COLUMN media_paths TEXT NOT NULL DEFAULT '["videos", "fotos"]'`);
   }

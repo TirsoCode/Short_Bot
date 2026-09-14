@@ -118,7 +118,7 @@ export const ShortCard: React.FC<ShortCardProps> = ({
 
           {short.status === 'accepted' && onUpload && (
             <Button size="sm" onClick={() => onUpload(short.id)} className="bg-blue-600 hover:bg-blue-700">
-              Subir a YouTube
+              Enviar a Buffer
             </Button>
           )}
 

@@ -2,9 +2,9 @@ import cron, { ScheduledTask } from 'node-cron';
 import { syncLocalMedia } from '@/lib/local-media';
 import { maybeRunAutoShorts } from '@/lib/auto-shorts';
 import { renderQueue } from './render-queue';
-import { shortQueries, youtubeTokenQueries } from '@/lib/db/queries';
-import { YouTubeClient } from '@/lib/youtube';
-import { publicToFsPath, rendersDir } from '@/lib/paths';
+import { shortQueries, settingsQueries } from '@/lib/db/queries';
+import { publishShortToBuffer } from '@/lib/buffer';
+import { rendersDir } from '@/lib/paths';
 import fs from 'fs';
 import path from 'path';
 
@@ -32,16 +32,15 @@ export function startScheduler() {
     });
   }));
   jobs.push(cron.schedule('* * * * *', async () => {
+    const settings = await settingsQueries.find();
+    if (!settings?.autoPublish) return;
     const shorts = await shortQueries.findByStatus('accepted');
     for (const s of shorts) {
       if (!s.rendered_path) continue;
-      const tokens = await youtubeTokenQueries.find();
-      if (!tokens) continue;
       try {
         shortQueries.updateStatus(s.id, 'uploading');
-        const yt = await YouTubeClient.create(tokens);
-        const url = await yt.uploadShort(s, publicToFsPath(s.rendered_path));
-        shortQueries.updateStatus(s.id, 'published', { youtube_url: url, youtube_video_id: url.split('v=')[1]?.split('&')[0] });
+        const result = await publishShortToBuffer(s.id);
+        shortQueries.updateStatus(s.id, 'published', { youtube_url: 'https://buffer.com', youtube_video_id: result.post?.id });
       } catch (e: any) {
         shortQueries.updateStatus(s.id, 'failed', { error_message: e.message });
       }

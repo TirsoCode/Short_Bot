@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, interpolate, Spring, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { DEFAULT_STYLE_PROPS, type ShortStyleProps } from '../compositions/Short';
 
 interface HookOverlayProps {
@@ -20,21 +20,18 @@ export const HookOverlay: React.FC<HookOverlayProps> = ({
   style: userStyle,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
   const style: ShortStyleProps = { ...DEFAULT_STYLE_PROPS, ...(userStyle ?? {}) };
 
   const fadeInFrames = 30;
   const fadeOutFrames = 30;
   const holdFrames = (toFrame - fromFrame) - fadeInFrames - fadeOutFrames;
 
-  const opacity = Spring({
+  const opacity = interpolate(
     frame,
-    fps,
-    config: { damping: 20, stiffness: 150 },
-    from: fromFrame,
-    to: toFrame,
-    range: [0, 1],
-  });
+    [fromFrame, fromFrame + fadeInFrames, toFrame - fadeOutFrames, toFrame],
+    [0, 1, 1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+  );
 
   const scale = interpolate(
     frame,
@@ -63,7 +60,7 @@ export const HookOverlay: React.FC<HookOverlayProps> = ({
       <div
         style={{
           transform: `translateY(${yOffset}px) scale(${scale})`,
-          opacity: opacity.current,
+          opacity,
           textAlign: 'center',
           maxWidth: width * 0.85,
         }}

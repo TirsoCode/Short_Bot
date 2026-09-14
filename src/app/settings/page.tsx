@@ -9,19 +9,17 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/useToast';
-import { useYouTubeStatus } from '@/hooks/useYouTubeUpload';
+import { type BufferStatus } from '@/hooks/useBuffer';
 import { ArrowLeft, Loader2, Check, X, ExternalLink, Sparkles } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import type { Settings, HookPhrase } from '@/types';
 import { DEFAULT_STYLE } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 
 function SettingsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { data: ytStatus } = useYouTubeStatus();
   const [saving, setSaving] = useState(false);
 
   const [aiRequest, setAiRequest] = useState('');
@@ -30,17 +28,16 @@ function SettingsContent() {
   const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
   const [aiModel, setAiModel] = useState('big-pickle');
 
+  const [bufferStatus, setBufferStatus] = useState<BufferStatus | null>(null);
+  const [bufferChecking, setBufferChecking] = useState(false);
+
   const [settings, setSettings] = useState({
     mediaPaths: 'videos,fotos',
     autoShortsPerDay: 2,
     autoPublish: false,
-    githubOwner: '',
-    githubRepo: '',
-    githubBranch: 'main',
-    githubPaths: 'videos,fotos',
-    githubToken: '',
-    youtubeClientId: '',
-    youtubeClientSecret: '',
+    bufferApiKey: '',
+    bufferChannelId: '',
+    bufferVideoBaseUrl: '',
     syncIntervalMinutes: 30,
     maxShortDuration: 30,
     videoWidth: 1080,
@@ -55,13 +52,9 @@ function SettingsContent() {
           mediaPaths: (data.settings.mediaPaths || ['videos', 'fotos']).join(','),
           autoShortsPerDay: data.settings.autoShortsPerDay ?? 2,
           autoPublish: !!(data.settings.autoPublish ?? false),
-          githubOwner: data.settings.githubOwner || '',
-          githubRepo: data.settings.githubRepo || '',
-          githubBranch: data.settings.githubBranch || 'main',
-          githubPaths: (data.settings.githubPaths || []).join(','),
-          githubToken: data.settings.githubToken || '',
-          youtubeClientId: data.settings.youtubeClientId || '',
-          youtubeClientSecret: data.settings.youtubeClientSecret || '',
+          bufferApiKey: data.settings.bufferApiKey || '',
+          bufferChannelId: data.settings.bufferChannelId || '',
+          bufferVideoBaseUrl: data.settings.bufferVideoBaseUrl || '',
           syncIntervalMinutes: data.settings.syncIntervalMinutes ?? 30,
           maxShortDuration: data.settings.maxShortDuration ?? 30,
           videoWidth: data.settings.videoWidth ?? 1080,
@@ -71,13 +64,6 @@ function SettingsContent() {
       }
     });
   }, []);
-
-  useEffect(() => {
-    const ytError = searchParams.get('youtube_error');
-    const ytConnected = searchParams.get('youtube_connected');
-    if (ytError) toast({ title: 'Error YouTube', description: ytError, variant: 'destructive' });
-    if (ytConnected) toast({ title: 'YouTube conectado', description: 'Cuenta vinculada correctamente', variant: 'success' });
-  }, [searchParams, toast]);
 
   useEffect(() => {
     fetch('/api/zen/style').then(r => r.json()).then(data => {
@@ -136,7 +122,6 @@ function SettingsContent() {
         body: JSON.stringify({
           ...settings,
           mediaPaths: settings.mediaPaths.split(',').map(s => s.trim()).filter(Boolean),
-          githubPaths: settings.githubPaths.split(',').map(s => s.trim()).filter(Boolean),
         }),
       });
       toast({ title: 'Guardado', variant: 'success' });
@@ -144,6 +129,25 @@ function SettingsContent() {
       toast({ title: 'Error al guardar', variant: 'destructive' });
     }
     setSaving(false);
+  };
+
+  const handleCheckBuffer = async () => {
+    setBufferChecking(true);
+    try {
+      const res = await fetch(`/api/buffer/status?apiKey=${encodeURIComponent(settings.bufferApiKey)}`);
+      const data = await res.json();
+      setBufferStatus(data);
+      if (data.configured && data.channels?.length) {
+        toast({ title: 'Buffer conectado', description: `${data.channels.length} canales encontrados`, variant: 'success' });
+      } else if (data.configured) {
+        toast({ title: 'Buffer conectado', description: 'Conecta tu cuenta de YouTube dentro de Buffer', variant: 'default' });
+      } else {
+        toast({ title: 'Buffer sin configurar', description: data.error || 'Revisa tu API key', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo contactar con Buffer', variant: 'destructive' });
+    }
+    setBufferChecking(false);
   };
 
   return (
@@ -252,36 +256,57 @@ function SettingsContent() {
 
         <Card>
           <CardHeader>
-            <CardTitle>GitHub</CardTitle>
-            <CardDescription>Conecta tu repositorio con los vídeos y capturas</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Propietario/Equipo</Label><Input value={settings.githubOwner} onChange={e => setSettings({...settings, githubOwner: e.target.value})} placeholder="mi-usuario" /></div>
-              <div className="space-y-2"><Label>Repositorio</Label><Input value={settings.githubRepo} onChange={e => setSettings({...settings, githubRepo: e.target.value})} placeholder="mi-repo" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Rama</Label><Input value={settings.githubBranch} onChange={e => setSettings({...settings, githubBranch: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Carpetas (separadas por coma)</Label><Input value={settings.githubPaths} onChange={e => setSettings({...settings, githubPaths: e.target.value})} placeholder="videos,screenshots" /></div>
-            </div>
-            <div className="space-y-2"><Label>Personal Access Token (PAT)</Label><Input type="password" value={settings.githubToken} onChange={e => setSettings({...settings, githubToken: e.target.value})} placeholder="ghp_..." /></div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              YouTube
-              {ytStatus?.connected ? <Badge className="bg-green-500">Conectado</Badge> : <Badge variant="secondary">No conectado</Badge>}
+              Buffer
+              {bufferStatus?.configured ? <Badge className="bg-green-500">Conectado</Badge> : <Badge variant="secondary">No configurado</Badge>}
             </CardTitle>
-            <CardDescription>Conecta tu canal de YouTube para subir shorts</CardDescription>
+            <CardDescription>Publica tus shorts como vídeos programados con Buffer (YouTube, TikTok, Instagram...)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2"><Label>Client ID</Label><Input value={settings.youtubeClientId} onChange={e => setSettings({...settings, youtubeClientId: e.target.value})} /></div>
-            <div className="space-y-2"><Label>Client Secret</Label><Input type="password" value={settings.youtubeClientSecret} onChange={e => setSettings({...settings, youtubeClientSecret: e.target.value})} /></div>
-            <Button onClick={() => window.open('/api/youtube/auth', '_blank')} disabled={!settings.youtubeClientId || !settings.youtubeClientSecret}>
-              {ytStatus?.connected ? 'Conectar otra cuenta' : 'Conectar con YouTube'}
+            <div className="space-y-2">
+              <Label>API key de Buffer</Label>
+              <Input type="password" value={settings.bufferApiKey} onChange={e => setSettings({...settings, bufferApiKey: e.target.value})} placeholder="buffer-api-key" />
+            </div>
+            <Button onClick={handleCheckBuffer} disabled={bufferChecking || !settings.bufferApiKey.trim()} variant="outline">
+              {bufferChecking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+              Comprobar conexión
             </Button>
+
+            <div className="space-y-2">
+              <Label>Canal de YouTube (en Buffer)</Label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={settings.bufferChannelId}
+                onChange={e => setSettings({...settings, bufferChannelId: e.target.value})}
+              >
+                <option value="">{bufferStatus?.channels?.length ? 'Selecciona un canal...' : 'Comprueba tu conexión para ver los canales'}</option>
+                {bufferStatus?.organizations?.map(org => (
+                  <optgroup key={org.id} label={org.name}>
+                    {org.channels.map(c => (
+                      <option key={c.id} value={c.id}>{c.displayName || c.name} ({c.service})</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Video base URL (pública)</Label>
+              <Input type="url" value={settings.bufferVideoBaseUrl} onChange={e => setSettings({...settings, bufferVideoBaseUrl: e.target.value})} placeholder="https://shortbot-nine.vercel.app" />
+              <p className="text-xs text-muted-foreground">
+                Es el dominio público donde se sirven tus MP4. Buffer necesita una URL accesible para descargar el vídeo
+                (por ejemplo tu app en Vercel). Déjalo vacío si aún no lo tienes.
+              </p>
+            </div>
+
+            {!bufferStatus?.configured && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                1. Crea tu cuenta en <a className="underline" href="https://buffer.com" target="_blank" rel="noreferrer">buffer.com</a>{' '}
+                y conecta tu canal de YouTube.<br />
+                2. Genera tu API key en el panel de Buffer (Manage Apps → Access Token).<br />
+                3. Pégalo aquí, pulsa "Comprobar conexión" y selecciona tu canal.
+              </div>
+            )}
           </CardContent>
         </Card>
 

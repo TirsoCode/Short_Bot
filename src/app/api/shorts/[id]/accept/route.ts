@@ -1,25 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { shortQueries, youtubeTokenQueries } from '@/lib/db/queries';
+import { shortQueries, settingsQueries } from '@/lib/db/queries';
 import { renderQueue } from '@/lib/render-queue';
-import { YouTubeClient } from '@/lib/youtube';
-import { publicToFsPath } from '@/lib/paths';
+import { publishShortToBuffer } from '@/lib/buffer';
 
-async function uploadShort(id: string) {
+async function publishToBuffer(id: string) {
   try {
     const short = await shortQueries.findById(id);
     if (!short || !short.rendered_path) return;
-    const tokens = await youtubeTokenQueries.find();
-    if (!tokens) return;
-
-    shortQueries.updateStatus(id, 'uploading');
-    const youtube = await YouTubeClient.create(tokens);
-    const url = await youtube.uploadShort(short, publicToFsPath(short.rendered_path));
-    shortQueries.updateStatus(id, 'published', {
-      youtubeUrl: url,
-      youtubeVideoId: url.split('v=')[1]?.split('&')[0],
+    await shortQueries.updateStatus(id, 'uploading');
+    const result = await publishShortToBuffer(id);
+    await shortQueries.updateStatus(id, 'published', {
+      youtubeUrl: `https://buffer.com`,
+      youtubeVideoId: result.post?.id,
     });
   } catch (error: any) {
-    shortQueries.updateStatus(id, 'failed', { errorMessage: error.message });
+    await shortQueries.updateStatus(id, 'failed', { errorMessage: error.message });
   }
 }
 
@@ -36,7 +31,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (short.status === 'rendered' || short.status === 'rejected' || short.status === 'failed') {
     await shortQueries.updateStatus(id, 'accepted');
-    void uploadShort(id);
+    const settings = await settingsQueries.find();
+    if (settings?.autoPublish) {
+      void publishToBuffer(id);
+    }
     return NextResponse.json({ success: true, status: 'accepted' });
   }
 
