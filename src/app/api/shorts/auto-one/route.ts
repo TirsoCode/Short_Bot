@@ -7,7 +7,7 @@ export async function POST() {
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
-    return NextResponse.json({ success: true, hookText: result.hookText });
+    return NextResponse.json({ success: true, hookText: result.hookText, shortId: result.shortId });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

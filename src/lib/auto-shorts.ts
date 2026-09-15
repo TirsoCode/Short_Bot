@@ -3,8 +3,8 @@ import { renderQueue } from '@/lib/render-queue';
 import { generateId } from '@/lib/utils';
 import { generateShortContent, generateHooksBatch, getHookPoolTarget } from '@/lib/ai';
 
-function pickRandom<T>(items: T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
+function pickRandom<T>(items: T[]): T | undefined {
+  return items.length ? items[Math.floor(Math.random() * items.length)] : undefined;
 }
 
 function pickRandomN<T>(items: T[], n: number): T[] {
@@ -18,6 +18,7 @@ function pickRandomN<T>(items: T[], n: number): T[] {
 
 const HOOK_REFILL_THRESHOLD = 5;
 const HOOK_REFILL_BATCH = 10;
+const FALLBACK_HOOK = 'No creerás lo que viene a continuación';
 
 /**
  * Si quedan pocos hooks activos, llama a OpenCode Zen por lotes y crea
@@ -64,9 +65,10 @@ export async function generateAutoShort(publish: boolean): Promise<boolean> {
   } else {
     const refreshed = await hookQueries.findActive();
     const pool = refreshed.length ? refreshed : hooks;
-    const hook = pickRandom(pool);
-    hookId = hook.id;
-    hookText = hook.text;
+    const chosen = pickRandom(pool);
+    const fallback = await hookQueries.create(FALLBACK_HOOK);
+    hookId = chosen?.id ?? fallback.id;
+    hookText = chosen?.text ?? fallback.text;
   }
 
   const short = await shortQueries.create({
@@ -90,7 +92,7 @@ export async function generateAutoShort(publish: boolean): Promise<boolean> {
  * Botón manual "Generar uno más (IA)": genera 1 short sin límite diario
  * usando OpenCode Zen. Devuelve el hook usado si lo hubo.
  */
-export async function generateOneManualShort(): Promise<{ success: boolean; hookText?: string; error?: string }> {
+export async function generateOneManualShort(): Promise<{ success: boolean; hookText?: string; shortId?: string; error?: string }> {
   const media = await mediaQueries.findAll();
   if (!media.length) return { success: false, error: 'No hay medios disponibles para generar un short' };
 
@@ -109,9 +111,10 @@ export async function generateOneManualShort(): Promise<{ success: boolean; hook
   } else {
     const refreshed = await hookQueries.findActive();
     if (!refreshed.length) return { success: false, error: 'No hay hooks activos y Zen no devolvió ninguno' };
-    const hook = pickRandom(refreshed);
-    hookId = hook.id;
-    hookText = hook.text;
+    const chosen = pickRandom(refreshed);
+    if (!chosen) return { success: false, error: 'No hay hooks activos y Zen no devolvió ninguno' };
+    hookId = chosen.id;
+    hookText = chosen.text;
   }
 
   const short = await shortQueries.create({
@@ -127,17 +130,23 @@ export async function generateOneManualShort(): Promise<{ success: boolean; hook
   if (!short) return { success: false, error: 'No se pudo crear el short' };
 
   renderQueue.add(short.id).catch(() => {});
-  return { success: true, hookText };
+  return { success: true, hookText, shortId: short.id };
+}
+
+function localDateString(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export async function maybeRunAutoShorts(): Promise<number> {
   const settings = await settingsQueries.find();
-  const perDay = settings?.autoShortsPerDay ?? 2;
+  const perDaySetting = Number(process.env.SHORTS_PER_DAY) || 2;
+  const perDay = Math.max(1, Math.min(24, settings?.autoShortsPerDay ?? perDaySetting));
   const publish = !!(settings?.autoPublish ?? 0);
   const autoRuns: string[] = Array.isArray(settings?.autoRuns) ? settings.autoRuns : [];
 
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = localDateString(now);
   const minutesOfDay = now.getHours() * 60 + now.getMinutes();
   const firstSlot = 9 * 60;
   const interval = Math.floor(1440 / perDay);
@@ -160,7 +169,7 @@ export async function maybeRunAutoShorts(): Promise<number> {
         ran++;
       }
     } catch (error: any) {
-      console.error('[Auto] Failed to generate short:', error.message);
+      console.error(`[Auto] Failed to generate short (slot ${k}):`, error.message);
     }
   }
 

@@ -21,6 +21,7 @@ export const mediaQueries = {
   async findAll() { return (await query('SELECT * FROM media ORDER BY created_at DESC')).map(toMedia); },
   async findByIds(ids: string[]) { if (!ids.length) return []; const ph = ids.map(() => '?').join(','); return (await query(`SELECT * FROM media WHERE id IN (${ph})`, ids)).map(toMedia); },
   async findBySha(sha: string) { const r = await getOne('SELECT * FROM media WHERE sha = ?', [sha]); return r ? toMedia(r as MediaRow) : null; },
+  async findByName(name: string) { const r = await getOne('SELECT * FROM media WHERE name = ?', [name]); return r ? toMedia(r as MediaRow) : null; },
   async create(d: any) { await run('INSERT INTO media (id, name, path, type, size, sha, url, downloaded_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [d.id, d.name, d.path, d.type, d.size, d.sha, d.url, d.downloadedPath || null]); return d; },
   async updateDownloadedPath(id: string, p: string) { await run('UPDATE media SET downloaded_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [p, id]); },
   async delete(id: string) { await run('DELETE FROM media WHERE id = ?', [id]); },

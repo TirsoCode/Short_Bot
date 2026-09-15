@@ -39,7 +39,7 @@ async function importFile(filePath: string): Promise<boolean> {
   if (type === 'unknown') return false;
 
   const sha = await sha1File(filePath);
-  const exists = await mediaQueries.findBySha(sha);
+  const exists = await mediaQueries.findBySha(sha) || await mediaQueries.findByName(name);
   if (exists) return false;
 
   ensureDirs();

@@ -9,9 +9,24 @@ import fs from 'fs';
 import path from 'path';
 
 let jobs: ScheduledTask[] = [];
+let startupTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function startScheduler() {
   stopScheduler();
+
+  // Catches-up al arrancar: si ya pasaron slots del día (p. ej. reboot a las 14:00)
+  // genera lo pendiente sin esperar a la siguiente hora exacta.
+  startupTimer = setTimeout(async () => {
+    try {
+      const ran = await maybeRunAutoShorts();
+      if (ran) console.log(`[Scheduler] Auto-generated ${ran} short(s) on startup`);
+      const r = await syncLocalMedia();
+      console.log(`[Scheduler] Startup sync: ${r.newMediaCount} new, ${r.errors.length} errors`);
+    } catch (e: any) {
+      console.error('[Scheduler] Startup run failed:', e.message);
+    }
+  }, 3000);
+
   jobs.push(cron.schedule('*/30 * * * *', async () => {
     console.log('[Scheduler] Syncing local folders...');
     const r = await syncLocalMedia();
@@ -49,4 +64,8 @@ export function startScheduler() {
   console.log('[Scheduler] Started');
 }
 
-export function stopScheduler() { jobs.forEach(j => j.stop()); jobs = []; }
+export function stopScheduler() {
+  if (startupTimer) { clearTimeout(startupTimer); startupTimer = null; }
+  jobs.forEach(j => j.stop());
+  jobs = [];
+}

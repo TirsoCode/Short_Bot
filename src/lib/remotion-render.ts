@@ -1,6 +1,6 @@
 import { shortQueries, mediaQueries, hookQueries, settingsQueries } from '@/lib/db/queries';
 import { normalizeStyle, DEFAULT_STYLE } from '@/lib/short-style';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { rendersDir, mediaDir, ensureDirs } from '@/lib/paths';
@@ -41,15 +41,51 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
   fs.writeFileSync(propsPath, JSON.stringify(inputProps));
 
   onProgress?.(10);
-  try {
-    execSync(`npx remotion render src/index.tsx ShortComposition "${outputPath}" --props="${propsPath}" --concurrency=1`, {
+  return new Promise<{ outputPath: string; publicUrl: string; duration: number }>((resolve, reject) => {
+    const args = ['remotion', 'render', 'src/index.tsx', 'ShortComposition', outputPath, `--props=${propsPath}`, '--concurrency=1'];
+    const child = spawn('npx', args, {
       cwd: path.join(process.cwd(), 'remotion'),
-      stdio: 'pipe',
+      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    onProgress?.(100);
-    return { outputPath, publicUrl: `/api/media/stream/${shortId}.mp4`, duration: maxDuration };
-  } catch (error: any) {
-    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-    throw error;
-  }
+
+    let out = '';
+    let err = '';
+    const recent: string[] = [];
+
+    const updateProgress = () => {
+      const text = recent.join('\n');
+      const frames = text.match(/(\d+)\s*\/\s*(\d+)/);
+      const percent = text.match(/(\d+(?:\.\d+)?)\s*%/);
+      let pct: number | null = null;
+      if (frames && Number(frames[2]) > 0) {
+        pct = (Number(frames[1]) / Number(frames[2])) * 100;
+      } else if (percent) {
+        pct = Number(percent[1]);
+      }
+      if (pct !== null) onProgress?.(Math.max(12, Math.min(95, Math.round(pct))));
+    };
+
+    const onChunk = (data: Buffer) => {
+      const s = data.toString();
+      out += s;
+      recent.push(s);
+      if (recent.length > 50) recent.shift();
+      updateProgress();
+    };
+
+    child.stdout.on('data', onChunk);
+    child.stderr.on('data', onChunk);
+    child.on('error', (e) => reject(e));
+    child.on('close', (code) => {
+      if (code === 0) {
+        onProgress?.(100);
+        resolve({ outputPath, publicUrl: `/api/media/stream/${shortId}.mp4`, duration: maxDuration });
+      } else {
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        const tail = err.trim().split('\n').slice(-8).join('\n');
+        reject(new Error(`Remotion render failed (exit ${code}): ${tail || 'unknown error'}`));
+      }
+    });
+  });
 }

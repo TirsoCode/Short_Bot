@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React, { useState, useEffect, useRef } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { ShortCard } from '@/components/shorts/ShortCard';
 import { ShortCreator } from '@/components/shorts/ShortCreator';
 import { MediaGrid } from '@/components/media/MediaGrid';
@@ -20,15 +21,29 @@ import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, Plus, Image, Video, LayoutList, Settings, Zap } from 'lucide-react';
 import type { Short, MediaItem } from '@/types';
 
+interface OneMoreState {
+  shortId: string;
+  phase: 'creating' | 'queued' | 'rendering';
+  progress: number;
+}
+
 function DashboardContent() {
   const { data: media = [], isLoading: mediaLoading } = useMedia();
   const { shorts, isLoading: shortsLoading, acceptShort, rejectShort, deleteShort } = useShorts();
+  const queryClient = useQueryClient();
   const syncMutation = useMediaSync();
   const gitSyncMutation = useGitHubSync();
   const bufferPublish = useBufferPublish();
   const { toast } = useToast();
   const router = useRouter();
   const [oneMoreLoading, setOneMoreLoading] = useState(false);
+  const [oneMoreState, setOneMoreState] = useState<OneMoreState | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+  useEffect(() => stopPolling, []);
 
   const draftShorts = shorts.filter(s => s.status === 'draft');
   const renderedShorts = shorts.filter(s => s.status === 'rendered');
@@ -91,19 +106,63 @@ function DashboardContent() {
 
   const handleGenerateOneMore = async () => {
     setOneMoreLoading(true);
+    setOneMoreState({ shortId: '', phase: 'creating', progress: 0 });
     try {
       const res = await fetch('/api/shorts/auto-one', { method: 'POST' });
       const data = await res.json();
-      if (data.success) {
-        toast({
-          title: 'Short generado con IA',
-          description: data.hookText || 'Short añadido a la cola de renderizado (OpenCode Zen)',
-          variant: 'success',
-        });
-      } else {
+      if (!data.success) {
+        setOneMoreState(null);
         toast({ title: 'No se pudo generar', description: data.error || 'Error desconocido', variant: 'destructive' });
+        return;
       }
+
+      const shortId: string = data.shortId;
+      setOneMoreLoading(false);
+      setOneMoreState({ shortId, phase: 'queued', progress: 0 });
+
+      const tick = async () => {
+        try {
+          const [renderRes, shortsRes] = await Promise.all([
+            fetch('/api/shorts/render').then(r => r.json()),
+            fetch('/api/shorts').then(r => r.json()),
+          ]);
+          const mine: Short | undefined = shortsRes.find((s: Short) => s.id === shortId);
+          if (!mine) return;
+
+          if (mine.status === 'rendered') {
+            stopPolling();
+            setOneMoreState({ shortId, phase: 'rendering', progress: 100 });
+            queryClient.invalidateQueries({ queryKey: ['shorts'] });
+            setTimeout(() => setOneMoreState(null), 2500);
+            return;
+          }
+          if (mine.status === 'failed') {
+            stopPolling();
+            setOneMoreState(null);
+            toast({ title: 'El render falló', description: mine.errorMessage || 'Error de renderizado', variant: 'destructive' });
+            queryClient.invalidateQueries({ queryKey: ['shorts'] });
+            return;
+          }
+
+          if (renderRes.currentJob?.shortId === shortId) {
+            setOneMoreState({
+              shortId,
+              phase: mine.status === 'rendering' ? 'rendering' : 'queued',
+              progress: renderRes.currentJob.progress ?? 0,
+            });
+          } else {
+            setOneMoreState(s => s ? { ...s, phase: 'queued' } : s);
+          }
+        } catch {
+          // reintenta en el siguiente tick
+        }
+      };
+
+      await tick();
+      pollRef.current = setInterval(tick, 900);
     } catch {
+      stopPolling();
+      setOneMoreState(null);
       toast({ title: 'Error', description: 'No se pudo generar el short', variant: 'destructive' });
     } finally {
       setOneMoreLoading(false);
@@ -132,13 +191,31 @@ function DashboardContent() {
               {syncMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Importar
             </Button>
-            <Button variant="secondary" size="sm" onClick={handleGenerateOneMore} disabled={oneMoreLoading} title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario">
-              {oneMoreLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
-              Generar uno más (IA)
+            <Button variant="secondary" size="sm" onClick={handleGenerateOneMore} disabled={oneMoreLoading || !!oneMoreState} title="Genera 1 short extra con IA (OpenCode Zen) sin límite diario">
+              {oneMoreLoading || oneMoreState ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+              {oneMoreState && oneMoreState.progress >= 100
+                ? '¡Listo!'
+                : oneMoreState ? 'Generando...' : 'Generar uno más (IA)'}
             </Button>
           </div>
         </div>
       </header>
+
+      {oneMoreState && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="font-medium text-muted-foreground">
+                {oneMoreState.phase === 'creating' && 'Creando idea con OpenCode Zen…'}
+                {oneMoreState.phase === 'queued' && 'En cola de renderizado…'}
+                {oneMoreState.phase === 'rendering' && 'Renderizando vídeo…'}
+              </span>
+              <span className="font-semibold tabular-nums">{Math.round(oneMoreState.progress)}%</span>
+            </div>
+            <Progress value={oneMoreState.progress} />
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid gap-4 mb-6 grid-cols-2 md:grid-cols-4">

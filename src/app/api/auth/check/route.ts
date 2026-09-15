@@ -3,5 +3,7 @@ import { cookies } from 'next/headers';
 
 export async function GET() {
   const cookieStore = await cookies();
-  return NextResponse.json({ authenticated: !!cookieStore.get('session')?.value });
+  const value = cookieStore.get('session')?.value;
+  const expected = process.env.SESSION_SECRET || process.env.LOGIN_PASSWORD;
+  return NextResponse.json({ authenticated: !!value && !!expected && value === expected });
 }

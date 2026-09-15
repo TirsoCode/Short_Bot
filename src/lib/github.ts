@@ -43,7 +43,7 @@ export class GitHubClient {
         if (item.type === 'file' && 'name' in item && 'sha' in item && 'size' in item && 'download_url' in item && 'html_url' in item) {
           const mediaType = getMediaType(item.name);
           if (mediaType !== 'unknown') {
-            const exists = await mediaQueries.findBySha(item.sha);
+            const exists = await mediaQueries.findBySha(item.sha) || await mediaQueries.findByName(item.name);
             if (!exists && item.download_url) {
               const response = await fetch(item.download_url);
               if (response.ok) {

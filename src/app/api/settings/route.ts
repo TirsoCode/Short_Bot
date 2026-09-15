@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { settingsQueries, hookQueries } from '@/lib/db/queries';
 
 export async function GET() {
-  return NextResponse.json({ settings: await settingsQueries.find(), hooks: await hookQueries.findAll() });
+  const settings = await settingsQueries.find();
+  if (settings) {
+    settings.githubToken = '';
+    settings.youtubeClientId = '';
+    settings.youtubeClientSecret = '';
+    settings.youtubeRefreshToken = '';
+  }
+  return NextResponse.json({ settings, hooks: await hookQueries.findAll() });
 }
 
 export async function PATCH(request: NextRequest) {
