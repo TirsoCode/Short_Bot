@@ -7,6 +7,12 @@ cd /root/short_bot
 export PATH="$PATH:/root/short_bot/node_modules/.bin:/usr/local/bin:/usr/bin:/bin"
 mkdir -p logs
 
+exec 9>/tmp/short_bot_supervisor.lock
+if ! flock -n 9; then
+  echo "[$(date '+%F %T')] otro supervisor ya está corriendo; saliendo" >> logs/server.log
+  exit 0
+fi
+
 log() { echo "[$(date '+%F %T')] $*" >> logs/server.log; }
 
 while true; do

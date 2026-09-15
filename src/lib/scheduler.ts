@@ -25,6 +25,18 @@ export function startScheduler() {
     } catch (e: any) {
       console.error('[Scheduler] Startup run failed:', e.message);
     }
+
+    // Recuperación: shorts atascados en 'rendering' (p. ej. tras un reinicio con
+    // el render a medias) vuelven a la cola de renderizado.
+    try {
+      const stuck = await shortQueries.findByStatus('rendering');
+      for (const s of stuck) {
+        console.log(`[Scheduler] Re-enqueuing stuck short ${s.id}`);
+        renderQueue.add(s.id).catch((e: any) => shortQueries.updateStatus(s.id, 'failed', { error_message: e.message }));
+      }
+    } catch (e: any) {
+      console.error('[Scheduler] Recovery failed:', e.message);
+    }
   }, 3000);
 
   jobs.push(cron.schedule('*/30 * * * *', async () => {
