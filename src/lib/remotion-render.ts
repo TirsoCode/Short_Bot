@@ -17,7 +17,13 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
   const width = settings?.video_width ?? 1080;
   const height = settings?.video_height ?? 1920;
   const fps = settings?.video_fps ?? 30;
-  const maxDuration = settings?.max_short_duration ?? 30;
+  const maxDuration = Math.max(8, settings?.max_short_duration ?? 30);
+
+  const hookOutroSeconds = 4;
+  const mediaCount = mediaItems.length;
+  const perItemDuration = mediaCount > 0
+    ? Math.max(0.5, Math.round(((maxDuration - hookOutroSeconds) / mediaCount) * 10) / 10)
+    : 0;
 
   const mediaForRemotion = mediaItems.map((m: any) => {
     const remotePath = m.downloaded_path;
@@ -26,11 +32,13 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
       : remotePath ?? m.url;
     return {
       id: m.id, type: m.type, path: localPath,
-      duration: Math.min(4, (maxDuration - 4) / mediaItems.length),
+      duration: perItemDuration,
     };
   });
 
-  const totalFrames = Math.ceil(maxDuration * fps);
+  const mediaTotalSeconds = mediaForRemotion.reduce((acc, m) => acc + m.duration, 0);
+  const contentSeconds = mediaCount > 0 ? Math.min(maxDuration, hookOutroSeconds + mediaTotalSeconds) : maxDuration;
+  const totalFrames = Math.ceil(contentSeconds * fps);
   const outputDir = rendersDir;
   ensureDirs();
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
@@ -50,7 +58,7 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
     });
 
     let out = '';
-    let err = '';
+    let errOut = '';
     const recent: string[] = [];
 
     const updateProgress = () => {
@@ -75,16 +83,16 @@ export async function renderShort(shortId: string, onProgress?: (progress: numbe
     };
 
     child.stdout.on('data', onChunk);
-    child.stderr.on('data', onChunk);
+    child.stderr.on('data', (d: Buffer) => { errOut += d.toString(); onChunk(d); });
     child.on('error', (e) => reject(e));
     child.on('close', (code) => {
       if (code === 0) {
         onProgress?.(100);
-        resolve({ outputPath, publicUrl: `/api/media/stream/${shortId}.mp4`, duration: maxDuration });
+        resolve({ outputPath, publicUrl: `/api/media/stream/${shortId}.mp4`, duration: contentSeconds });
       } else {
         if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        const tail = err.trim().split('\n').slice(-8).join('\n');
-        reject(new Error(`Remotion render failed (exit ${code}): ${tail || 'unknown error'}`));
+        const tail = errOut.trim().split('\n').slice(-8).join('\n');
+        reject(new Error(`Remotion render failed (exit ${code}): ${tail || out.trim().slice(-300) || 'unknown error'}`));
       }
     });
   });

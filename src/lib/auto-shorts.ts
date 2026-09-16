@@ -66,9 +66,14 @@ export async function generateAutoShort(publish: boolean): Promise<boolean> {
     const refreshed = await hookQueries.findActive();
     const pool = refreshed.length ? refreshed : hooks;
     const chosen = pickRandom(pool);
-    const fallback = await hookQueries.create(FALLBACK_HOOK);
-    hookId = chosen?.id ?? fallback.id;
-    hookText = chosen?.text ?? fallback.text;
+    if (chosen) {
+      hookId = chosen.id;
+      hookText = chosen.text;
+    } else {
+      const fallback = await hookQueries.create(FALLBACK_HOOK);
+      hookId = fallback.id;
+      hookText = fallback.text;
+    }
   }
 
   const short = await shortQueries.create({

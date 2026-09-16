@@ -30,13 +30,15 @@ export const MediaSequence: React.FC<MediaSequenceProps> = ({
   const mediaTimeline = useMemo(() => {
     let currentFrame = fromFrame;
     return media.map((item) => {
-      const duration = (item.duration ?? 4) * fps;
+      const desired = (item.duration ?? 4) * fps;
+      const available = Math.max(0, toFrame - currentFrame);
+      const durationFrames = Math.min(desired, available);
       const startFrame = currentFrame;
-      const endFrame = currentFrame + duration;
+      const endFrame = currentFrame + durationFrames;
       currentFrame = endFrame;
-      return { item, startFrame, endFrame, duration };
+      return { item, startFrame, endFrame, duration: durationFrames };
     });
-  }, [media, fromFrame, fps]);
+  }, [media, fromFrame, toFrame, fps]);
 
   return (
     <AbsoluteFill>

@@ -25,14 +25,14 @@ class RenderQueue {
       const job = this.queue.shift()!;
       this.currentJob = { shortId: job.shortId, status: 'processing', progress: 0 };
       try {
-        shortQueries.updateStatus(job.shortId, 'rendering');
+        await shortQueries.updateStatus(job.shortId, 'rendering');
         const result = await renderShort(job.shortId, (p: number) => { this.currentJob.progress = p; });
         this.currentJob = { ...this.currentJob, status: 'completed', progress: 100 };
-        shortQueries.updateStatus(job.shortId, 'rendered', { rendered_path: result.publicUrl, duration: result.duration });
+        await shortQueries.updateStatus(job.shortId, 'rendered', { rendered_path: result.publicUrl, duration: result.duration });
         job.resolve(result);
       } catch (error: any) {
         this.currentJob = { ...this.currentJob, status: 'failed', error: error.message };
-        shortQueries.updateStatus(job.shortId, 'failed', { error_message: error.message });
+        await shortQueries.updateStatus(job.shortId, 'failed', { error_message: error.message });
         job.reject(error);
       }
     }

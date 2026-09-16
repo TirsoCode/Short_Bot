@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { AbsoluteFill, interpolate, useVideoConfig, useCurrentFrame } from 'remotion';
+import React from 'react';
+import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { HookOverlay } from '../components/HookOverlay';
 import { MediaSequence } from '../components/MediaSequence';
 
@@ -49,22 +49,12 @@ export const ShortComposition: React.FC<ShortCompositionProps> = ({
   durationInFrames,
   style: userStyle,
 }) => {
-  const videoConfig = useVideoConfig();
   const style: ShortStyleProps = { ...DEFAULT_STYLE_PROPS, ...(userStyle ?? {}) };
 
   const hookDurationFrames = 3 * fps;
   const outroDurationFrames = 1 * fps;
   const mediaStartFrame = hookDurationFrames;
   const mediaEndFrame = durationInFrames - outroDurationFrames;
-
-  const totalMediaDuration = useMemo(() => {
-    return media.reduce((acc, m) => acc + (m.duration ?? 4), 0);
-  }, [media]);
-
-  const adjustedDurationInFrames = Math.max(
-    durationInFrames,
-    hookDurationFrames + totalMediaDuration * fps + outroDurationFrames
-  );
 
   return (
     <AbsoluteFill style={{ background: style.background }}>
@@ -86,18 +76,17 @@ export const ShortComposition: React.FC<ShortCompositionProps> = ({
         fps={fps}
       />
 
-      <Outro fromFrame={mediaEndFrame} toFrame={adjustedDurationInFrames} width={width} height={height} style={style} />
+      <Outro fromFrame={mediaEndFrame} width={width} height={height} style={style} />
     </AbsoluteFill>
   );
 };
 
 const Outro: React.FC<{
   fromFrame: number;
-  toFrame: number;
   width: number;
   height: number;
   style: ShortStyleProps;
-}> = ({ fromFrame, toFrame, style }) => {
+}> = ({ fromFrame, style }) => {
   const frame = useCurrentFrame();
   const opacity = interpolate(frame, [fromFrame, fromFrame + 30], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 

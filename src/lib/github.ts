@@ -1,5 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import { mediaQueries } from '@/lib/db/queries';
+import { mediaQueries, settingsQueries } from '@/lib/db/queries';
 import { getMediaType, generateId } from '@/lib/utils';
 import { mediaDir, ensureDirs } from '@/lib/paths';
 import fs from 'fs';
@@ -71,7 +71,13 @@ export class GitHubClient {
   }
 
   static async createFromSettings() {
-    return new GitHubClient(process.env.GITHUB_TOKEN || '', 'TirsoCode', 'short_bot', 'main', ['videos', 'fotos']);
+    const settings = await settingsQueries.find();
+    const owner = settings?.githubOwner || process.env.GITHUB_OWNER || 'TirsoCode';
+    const repo = settings?.githubRepo || process.env.GITHUB_REPO || 'short_bot';
+    const branch = settings?.githubBranch || process.env.GITHUB_BRANCH || 'main';
+    const token = settings?.githubToken || process.env.GITHUB_TOKEN || '';
+    const paths = settings?.githubPaths?.length ? settings.githubPaths : ['videos', 'fotos'];
+    return new GitHubClient(token, owner, repo, branch, paths);
   }
 }
 
