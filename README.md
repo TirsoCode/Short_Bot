@@ -27,7 +27,6 @@ npm install
 
 # 2. Configurar variables de entorno
 cp .env.example .env.local
-# Genera una contraseña secreta para LOGIN_PASSWORD (nunca uses una por defecto)
 # OPENCODE_ZEN_API_KEY (https://opencode.ai/zen) es OPCIONAL pero recomendada:
 # sin ella los hooks usan plantillas de respaldo en vez de la IA.
 
@@ -48,11 +47,10 @@ npm run dev
 ## Cómo usar
 
 1. Abre http://localhost:3000
-2. Entra con la contraseña de `LOGIN_PASSWORD` (defínela en tu `.env.local` o como secret/GitHub secret)
-3. Mete tus videos y fotos en `videos/` y `fotos/` (formatos: mp4, mov, webm, jpg, png, gif, webp)
-4. Ve a **Dashboard** → pulsa **Importar** (o espera al cron automático)
-5. Ve a **Crear Short** → elige frase gancho + medios → Generar
-6. En **Revisar** → Aceptar y Subir para subirlo a YouTube
+2. Mete tus videos y fotos en `videos/` y `fotos/` (formatos: mp4, mov, webm, jpg, png, gif, webp)
+3. Ve a **Dashboard** → pulsa **Importar** (o espera al cron automático)
+4. Ve a **Crear Short** → elige frase gancho + medios → Generar
+5. En **Revisar** → Aceptar y Subir para subirlo a YouTube
 
 ## Credenciales
 

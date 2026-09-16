@@ -130,7 +130,6 @@ Buenas prácticas:
 
 ## Variables de entorno importantes
 
-- LOGIN_PASSWORD — contraseña para el dashboard.
 - OPENCODE_ZEN_API_KEY — clave para OpenCode Zen (opcional pero recomendado).
 - SHORTS_PER_DAY — número máximo de shorts diarios.
 - HOOK_POOL_TARGET — objetivo de hooks.
