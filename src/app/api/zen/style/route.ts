@@ -6,14 +6,14 @@ import { DEFAULT_STYLE, normalizeStyle } from '@/lib/short-style';
 export async function GET() {
   const settings = await settingsQueries.find();
   return NextResponse.json({
-    configured: hasZenKey(),
+    configured: await hasZenKey(),
     model: process.env.OPENCODE_ZEN_MODEL || 'big-pickle',
     style: settings?.styleJson ?? DEFAULT_STYLE,
   });
 }
 
 export async function POST(request: Request) {
-  if (!hasZenKey()) {
+  if (!(await hasZenKey())) {
     return NextResponse.json({ error: 'OPENCODE_ZEN_API_KEY no está configurado' }, { status: 400 });
   }
 

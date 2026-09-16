@@ -27,6 +27,8 @@ function SettingsContent() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
   const [aiModel, setAiModel] = useState('big-pickle');
+  const [zenKey, setZenKey] = useState('');
+  const [zenKeySaving, setZenKeySaving] = useState(false);
 
   const [bufferStatus, setBufferStatus] = useState<BufferStatus | null>(null);
   const [bufferChecking, setBufferChecking] = useState(false);
@@ -131,6 +133,42 @@ function SettingsContent() {
     setSaving(false);
   };
 
+  const handleSaveZenKey = async () => {
+    const key = zenKey.trim();
+    if (!key) { toast({ title: 'Escribe una API key', variant: 'destructive' }); return; }
+    setZenKeySaving(true);
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openCodeZenApiKey: key }),
+      });
+      setZenKey('');
+      setAiConfigured(true);
+      toast({ title: 'Clave guardada', description: 'OpenCode Zen conectado', variant: 'success' });
+    } catch {
+      toast({ title: 'Error al guardar', variant: 'destructive' });
+    }
+    setZenKeySaving(false);
+  };
+
+  const handleClearZenKey = async () => {
+    setZenKeySaving(true);
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openCodeZenApiKey: '' }),
+      });
+      setZenKey('');
+      setAiConfigured(false);
+      toast({ title: 'Clave eliminada', variant: 'success' });
+    } catch {
+      toast({ title: 'Error al guardar', variant: 'destructive' });
+    }
+    setZenKeySaving(false);
+  };
+
   const handleCheckBuffer = async () => {
     setBufferChecking(true);
     try {
@@ -206,6 +244,51 @@ function SettingsContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-blue-500" />
+              OpenCode Zen
+              {aiConfigured ? <Badge className="bg-green-500">Conectado</Badge> : <Badge variant="secondary">No configurado</Badge>}
+            </CardTitle>
+            <CardDescription>
+              Tu API key de OpenCode Zen ({aiModel}) para generar hooks, títulos y ajustar el estilo de los vídeos con IA
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>API key de OpenCode Zen</Label>
+              <Input type="password" value={zenKey}
+                onChange={e => setZenKey(e.target.value)}
+                placeholder={aiConfigured ? 'sk-... (ya hay una clave guardada)' : 'sk-...'}
+                autoComplete="off" />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSaveZenKey} disabled={zenKeySaving || !zenKey.trim()}>
+                {zenKeySaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Guardar clave
+              </Button>
+              {aiConfigured && (
+                <Button onClick={handleClearZenKey} disabled={zenKeySaving} variant="outline">
+                  <X className="h-4 w-4 mr-2" />
+                  Quitar
+                </Button>
+              )}
+            </div>
+            <div className="rounded-lg bg-slate-50 border p-4 text-sm text-muted-foreground">
+              {aiConfigured ? (
+                'OpenCode Zen está conectado. Ya puedes usar la IA en el bloque "Estilo del vídeo (IA)" de abajo y en el dashboard.'
+              ) : (
+                <>
+                  Crea tu API key en{' '}
+                  <a className="underline" href="https://opencode.ai/zen" target="_blank" rel="noreferrer">opencode.ai/zen</a>{' '}
+                  y pégala aquí. Sin ella, los hooks usan plantillas de respaldo en vez de la IA.
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-500" />
               Estilo del vídeo (IA)
             </CardTitle>
             <CardDescription>
@@ -215,9 +298,8 @@ function SettingsContent() {
           <CardContent className="space-y-4">
             {aiConfigured === false ? (
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
-                No hay <code className="font-mono">OPENCODE_ZEN_API_KEY</code> configurada. Crea tu API key en
-                {' '}<a className="underline" href="https://opencode.ai/zen" target="_blank" rel="noreferrer">opencode.ai/zen</a>{' '}
-                y añádela al archivo <code className="font-mono">.env.local</code>.
+                No hay <code className="font-mono">OPENCODE_ZEN_API_KEY</code> configurada. Añádela en el bloque "OpenCode Zen"
+                de más arriba o en el archivo <code className="font-mono">.env.local</code>.
               </div>
             ) : null}
             <div className="space-y-2">

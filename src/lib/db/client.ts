@@ -47,6 +47,7 @@ function initSchema(database: SqlJsDatabase) {
   ensureColumn(database, 'settings', 'auto_runs', `TEXT NOT NULL DEFAULT '[]'`);
   ensureColumn(database, 'settings', 'style_json', `TEXT NOT NULL DEFAULT '{"background":"#000000","hookTextColor":"#ffffff","hookBg":"rgba(0, 0, 0, 0.75)","hookBorder":"rgba(255, 255, 255, 0.15)","hookFontSize":52,"accent":"#3b82f6","outroText":"¡Sígueme para más!","outroSubtext":"Suscríbete y activa la campanita 🔔"}'`);
   ensureColumn(database, 'settings', 'buffer_api_key', `TEXT NOT NULL DEFAULT ''`);
+  ensureColumn(database, 'settings', 'open_code_zen_api_key', `TEXT NOT NULL DEFAULT ''`);
   ensureColumn(database, 'settings', 'buffer_channel_id', `TEXT NOT NULL DEFAULT ''`);
   ensureColumn(database, 'settings', 'buffer_video_base_url', `TEXT NOT NULL DEFAULT ''`);
   database.run(`CREATE INDEX IF NOT EXISTS media_sha_idx ON media(sha)`);

@@ -1,10 +1,19 @@
 import { type ShortStyle, normalizeStyle } from '@/lib/short-style';
+import { settingsQueries } from '@/lib/db/queries';
 
 const ZEN_URL = 'https://opencode.ai/zen/v1/chat/completions';
 const ZEN_MODEL = process.env.OPENCODE_ZEN_MODEL || 'big-pickle';
 
-export function hasZenKey(): boolean {
-  return !!process.env.OPENCODE_ZEN_API_KEY;
+async function getZenApiKey(): Promise<string | null> {
+  try {
+    const settings = await settingsQueries.find();
+    if (settings?.openCodeZenApiKey) return settings.openCodeZenApiKey;
+  } catch {}
+  return process.env.OPENCODE_ZEN_API_KEY || null;
+}
+
+export async function hasZenKey(): Promise<boolean> {
+  return !!(await getZenApiKey());
 }
 
 export interface ShortIdea {
@@ -15,7 +24,7 @@ export interface ShortIdea {
 }
 
 export async function applyStyleRequest(request: string, current: ShortStyle): Promise<ShortStyle | null> {
-  const apiKey = process.env.OPENCODE_ZEN_API_KEY;
+  const apiKey = await getZenApiKey();
   if (!apiKey) return null;
 
   const res = await fetch(ZEN_URL, {
@@ -62,7 +71,7 @@ export async function applyStyleRequest(request: string, current: ShortStyle): P
 }
 
 export async function generateShortContent(mediaNames?: string[]): Promise<ShortIdea | null> {
-  const apiKey = process.env.OPENCODE_ZEN_API_KEY;
+  const apiKey = await getZenApiKey();
   if (!apiKey) return null;
 
   const mediaHint = mediaNames?.length
@@ -134,7 +143,7 @@ export function getHookPoolTarget(): number {
  * o si no hay API key configurada.
  */
 export async function generateHooksBatch(count: number): Promise<string[]> {
-  const apiKey = process.env.OPENCODE_ZEN_API_KEY;
+  const apiKey = await getZenApiKey();
   if (!apiKey) return [];
 
   const res = await fetch(ZEN_URL, {

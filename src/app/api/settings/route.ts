@@ -8,6 +8,7 @@ export async function GET() {
     settings.youtubeClientId = '';
     settings.youtubeClientSecret = '';
     settings.youtubeRefreshToken = '';
+    settings.openCodeZenApiKey = '';
   }
   return NextResponse.json({ settings, hooks: await hookQueries.findAll() });
 }
